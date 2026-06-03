@@ -1,0 +1,205 @@
+{
+  "productName": "SoECompanion",
+  "version": "1.0.0",
+  "identifier": "com.soecompanion.app",
+  "build": {
+    "beforeDevCommand": "corepack pnpm dev",
+    "beforeBuildCommand": "corepack pnpm build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/sounds/*"
+        ]
+      }
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "SoE Companion",
+        "width": 1040,
+        "height": 740,
+        "resizable": true,
+        "fullscreen": false
+      },
+      {
+        "label": "overlay",
+        "title": "SoE Companion Overlay",
+        "width": 800,
+        "height": 600,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "tracker-overlay",
+        "title": "SoE Companion Tracker",
+        "width": 360,
+        "height": 620,
+        "minWidth": 280,
+        "minHeight": 320,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "skipTaskbar": false,
+        "alwaysOnTop": false,
+        "visible": false
+      },
+      {
+        "label": "muling-banner",
+        "title": "SoE Companion Muling Mode",
+        "width": 300,
+        "height": 48,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "notification-card-overlay",
+        "title": "SoE Companion Notifications Overlay",
+        "width": 320,
+        "height": 420,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "drops-card-overlay",
+        "title": "SoE Companion Drops Overlay",
+        "width": 240,
+        "height": 260,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "total-card-overlay",
+        "title": "SoE Companion Total Drops Overlay",
+        "width": 240,
+        "height": 190,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "grail-card-overlay",
+        "title": "SoE Companion Grail Overlay",
+        "width": 240,
+        "height": 290,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "runes-card-overlay",
+        "title": "SoE Companion Rune Overlay",
+        "width": 280,
+        "height": 560,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "achievement-card-overlay",
+        "title": "SoE Companion Achievement Overlay",
+        "width": 238,
+        "height": 86,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "achievement-popup-overlay",
+        "title": "SoE Companion Achievement Popup Overlay",
+        "width": 300,
+        "height": 88,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "kills-card-overlay",
+        "title": "SoE Companion Monster Kills Overlay",
+        "width": 238,
+        "height": 74,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "muling-card-overlay",
+        "title": "SoE Companion Muling Indicator Overlay",
+        "width": 58,
+        "height": 58,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "mats-card-overlay",
+        "title": "SoE Companion Mats Overlay",
+        "width": 280,
+        "height": 420,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      }
+    ]
+  },
+  "bundle": {},
+  "plugins": {}
+}

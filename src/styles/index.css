@@ -1,0 +1,48 @@
+/* =============================================
+   D2MXLUtils - Main CSS Entry Point
+   ============================================= */
+
+/* Design tokens and CSS variables */
+@import './variables.css';
+
+/* Theme definitions */
+@import './themes/dark.css';
+@import './themes/light.css';
+@import './themes/sanctuary.css';
+@import './themes/horadric.css';
+@import './themes/hellfire.css';
+
+/* Base reset */
+@import './reset.css';
+
+/* Component styles */
+@import './components.css';
+
+@font-face {
+  font-family: 'Diablo';
+  src: url('../assets/fonts/diablo.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =============================================
+   Application-specific styles
+   ============================================= */
+
+/* Main app container */
+html:not(.overlay-mode) #app {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Overlay window - fully transparent */
+html.overlay-mode,
+html.overlay-mode body,
+html.overlay-mode #app {
+  background: var(--bg-overlay) !important;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}

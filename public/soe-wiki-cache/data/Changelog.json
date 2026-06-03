@@ -1,0 +1,70 @@
+[
+  {
+    "id": "1.1.5",
+    "title": "v1.1.5",
+    "text": [
+      "- Added corruptions tab with filtering capabilities by item type",
+      "- This feature is still in beta and will be tweaked",
+      "- Now displays for which SoE version the wiki has information"
+    ]
+  },
+  {
+    "id": "1.1.4",
+    "title": "v1.1.4",
+    "text": [
+      "- Added ability to filter runewords by amount of runes in a runeword",
+      "- Added ability to filter runewords by runes",
+      "- Added ability to filter sacreds by runes"
+    ]
+  },
+  {
+    "id": "1.1.3",
+    "title": "v1.1.3",
+    "text": [
+      "- Added ability to filter only Hellforged items in the uniques tab",
+      "- Fixed some CSS bugs",
+      "- Fixed some bugs in item descriptions"
+    ]
+  },
+  {
+    "id": "1.1.2",
+    "title": "v1.1.2",
+    "text": [
+      "- Added Aura & Curse effect calculators",
+      "- Added information about Damnation Mode"
+    ]
+  },
+  {
+    "id": "1.1.1",
+    "title": "v1.1.1",
+    "text": [
+      "- Added dynamic links to SoE custom skills in skill descriptions"
+    ]
+  },
+  {
+    "id": "1.1.0",
+    "title": "v1.1.0",
+    "text": [
+      "- Added Affixes table with sorting and filtering capabilities",
+      "- Added Skills tab with non-class skills descriptions added in SoE"
+    ]
+  },
+  {
+    "id": "1.0.1",
+    "title": "v1.0.1",
+    "text": [
+      "- Added level requirement to runewords",
+      "- Added orange asterisk indicator to unique items to mark it was added in SoE",
+      "- Improved the UI display on mobile"
+    ]
+  },
+  {
+    "id": "1.0.0",
+    "title": "v1.0.0",
+    "text": [
+      "- Initial release"
+    ]
+  }
+]
+
+

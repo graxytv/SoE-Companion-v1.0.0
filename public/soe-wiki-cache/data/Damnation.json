@@ -1,0 +1,88 @@
+[
+  {
+    "id": "about",
+    "title": "About Damnation Mode",
+    "text": [
+      "- Damnation Mode in Sanctuary of Exile is an optional challenge mode that was designed with less casual players in mind",
+	  "- This mode features reduced drop rates in relation to Standard Mode",
+	  "- All changes from Standard Mode are present in this mode unless stated otherwise on this page"
+    ]
+  },
+  {
+    "id": "disabled-content",
+    "title": "Disabled Content",
+    "text": [
+		"- Exalted, Mythic and Divine Orbs are not available in this mode and their cube recipes have been disabled",
+		"- Mythic and Divine Orb are not available as drops from the Hellforge",
+		"- Terror of Opulence has been removed from drop tables",
+		"- Flawed gems were re-added to Act 1-5 in Nightmare, Act 1-5 Hell and Map treasure classes"
+    ]
+  },
+  {
+    "id": "additional-content",
+    "title": "Additional Content",
+    "text": [
+	"Orb of Chance has been introduced - this item is obtainable ONLY by disenchanting uniques into shards and 10x Chance Shard into Orb of Chance. Players can also cube 20, 30, 40 and 50 shards to obtain 2,3,4 or 5 Orb of Chance:",
+	"- Orb of Chance works with normal, magic and rare armor and weapons",
+	"- Orb of Chance works with magic and rare rings and amulets",
+	"- Orb of Chance works with magic grand and ornate charms",
+	"- Orb of Chance has 50% chance to destroy an item, turning it into a key",
+	"- Orb of Chance respects the occurrence chance of unique items:",
+	"- Eg. Templar’s Might shares base (Sacred Armor) with Tyrael’s Might - the first one has occurrence chance of 80% and the second one 20%",
+	"- To disenchant a unique item, cube it with a key to always obtain 1x Chance Shard",
+	"Exalted Orb has been re-enabled - this item is obtainable ONLY by disenchanting set items into shards and 10x Exalted Shard into Exalted Orb. Players can also cube 20, 30, 40 and 50 shards to obtain 2,3,4 or 5 Exalted Orbs:",
+	"- Exalted Orb works with normal, magic and rare armor and weapons",
+	"- Exalted Orb works with magic and rare rings and amulets",
+	"- Exalted Orb has 50% chance to destroy an item, turning it into a key",
+	"- Exalted Orb respects the occurrence chance of unique items",
+	"- To disenchant a set item, cube it with a key to always obtain 1x Exalted Shard"
+    ]
+  },
+  {
+    "id": "cube-changes",
+    "title": "Cube Recipe changes",
+    "text": [
+		"- Cube recipe to `Obtain targeted Hellforged Unique` requires the unique item you want to make hellforged and `1x Orb of Chance`",
+		"- Cube recipe to `Obtain random Hellforged Unique` has been changed from requiring `5x Mythic Orb` to require `1x Orb of Chance`",
+		"- Rune downgrading from El to Lem now yields only 1 of the lesser rune (down from 3)",
+		"- Recipe to obtain Armageddon Blade: `Phase Blade + 5x Orb of Chance + 1x Eternal Coin`"
+
+    ]
+  },
+  {
+    "id": "other-changes",
+    "title": "Other changes",
+    "text": [
+		"- `Cain’s Wisdom` exp bonus from `250-400%` to `25-40%`"
+    ]
+  },
+  {
+    "id": "drop-rate-changes",
+    "title": "Drop rate changes",
+    "text": [
+		"Below drop rate changes are in relation to Standard Mode: ",
+		"- Larzuk Puzzlebox does not drop on Normal difficulty",
+		"- Larzuk Puzzlebox on Nightmare from 1:6000 to 1:40000",
+		"- Larzuk Puzzlebox on Hell from 1:2000 to 1:20000",
+		"- Orb of Extraction does not drop on Normal difficulty",
+		"- Orb of Extraction on Nightmare from 1:20000 to 1:30000",
+		"- Orb of Extraction on Hell from 1:20000 to 1:10000",
+		"- Lilith Mirror on Hell from 1:500 000 to 1:1 500 000",
+		"- Vial of Lightsong on Hell from 1:100 000 to 1:300 000",
+		"- WSS in Corrupted Zones from 1:25 to 1:75",
+		"- Unique map from Hell monsters from 1:36500 to 1:75 000",
+		"- Unique map from map bosses from 1:3000 to 1:4500",
+		"- Rathma Jawbone on Hell from 1:1300 to 1:4000",
+		"- Uber Ancients fragments from 1:1700 to 1:3400",
+		"- Demonic Insignia on Hell from 1:150 to 1:800",
+		"- Talisman of Transgression on Hell from 1:100 to 1:600",
+		"- Flesh of Malic from 1:1300 to 1:4000",
+		"- Demonic Cube on Normal from 1:12000 to 1:30000",
+		"- Demonic Cube on Nightmare from 1:6000 to 1:20000",
+		"- Demonic Cube on Hell from 1:2000 to 1:10000",
+		"- Terror drop rates reduced by 40%"
+    ]
+  }
+]
+
+

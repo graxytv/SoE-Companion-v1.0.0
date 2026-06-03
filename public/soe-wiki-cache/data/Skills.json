@@ -1,0 +1,201 @@
+[
+  {
+    "id": "about",
+    "title": "About skills",
+    "text": [
+      "- Here you can find non-class skills added in Sanctuary of Exile",
+      "- For vanilla skills, please refer to [Vanilla PD2 Wiki](https://wiki.projectdiablo2.com/wiki/Main_Page)"
+    ]
+  },
+  {
+    "id": "skill-frailty",
+    "title": "Frailty",
+    "text": [
+      "Frailty is a new aura that reduces enemy physical resistance: ",
+      "- Reduces enemy physical resistance - starts at 15% and receives 1% additional reduction per level",
+      "- Reduces enemy defense - min. 25%, max 90%",
+      "- Can break immunities"
+    ]
+  },
+  {
+    "id": "skill-rimefall",
+    "title": "Rimefall",
+    "text": [
+      "Shoot forth cold enchanted arrow that leave a wave of rimefall behind, dealing cold damage to enemies:",
+      "- Deals 100% weapon damage",
+      "- Converts 50% physical damage to elemental damage",
+      "- Adds +% to attack rating",
+      "- Scales with +skills",
+      "- Freezes enemies for 0.2 seconds",
+      "- Deals cold damage per level:",
+      "  - On level 1 deals 28-40 damage",
+      "  - On levels 2-8 deals additional 8-16 damage",
+      "  - On levels 9-16 deals additional 20-24 damage",
+      "  - On levels 17-22 deals additional 60-64 damage",
+      "  - On levels 23-28 deals additional 120-128 damage",
+      "  - On levels 29+ deals additional 180-192 damage"
+    ]
+  },
+  {
+    "id": "skill-reinforce",
+    "title": "Reinforce",
+    "text": [
+      "New defensive skill that allows scaling of %PDR, flat PDR and MDR with base defence:",
+      "- scales of BASE defense from items + bonus from dexterity - this means that any % enhanced defense is not taken into account",
+      "- Gain 2 physical damage reduction per base defense according to formula",
+      "  - 1000 - 34 * base skill level",
+      "- Gain 1% physical damage reduction per base defense according to formula",
+      "  - 1000 - 34 * base skill level",
+      "- Gain 2 magic damage reduction per base defense according to formula",
+      "  - 1000 - 34 * base skill level",
+      "- For example, at level 15, to achieve each breakpoint:",
+      "  - Base defense: 4000",
+      "  - Skill level: 15",
+      "  - 1000 - 34 * 15 = 1000 - 510 = 490 - breakpoint every 490 defence",
+      "  - pdr - (4000 / 490 ) * 2 = ~8 * 2 = 16",
+      "  - pdr% - 4000 / 490 = ~8%",
+      "  - mdr - (4000 / 490) * 2 = ~8 * 2 = 16",
+      "- Duration: 6 seconds",
+      "- Affects also your allies",
+      "- Scales only with hard points"
+    ]
+  },
+  {
+    "id": "skill-gale-force",
+    "title": "Gale Force",
+    "text": [
+      "- Gale Force increases [action speed](app:changes:action speed) by 1% per 1 stack",
+      "- 1 cast is equivalent of gaining 1 stack",
+      "- 1 stack lasts 4 seconds",
+      "- The duration is refreshed when a stack is gained",
+      "- Maximum 10 stacks of Gale Force"
+    ]
+  },
+  {
+    "id": "skill-onslaught",
+    "title": "Onslaught",
+    "text": [
+      "- Increases cast rate, attack speed and run/walk speed by 25% for 5 seconds"
+    ]
+  },
+  {
+    "id": "headhunter-speed",
+    "title": "Headhunter Speed Trophy",
+    "text": [
+      "- Increases `cast rate, attack speed and run/walk speed` by `50%` for `10 seconds`"
+    ]
+  },
+  {
+    "id": "headhunter-damage",
+    "title": "Headhunter Damage Trophy",
+    "text": [
+      "- Increases `enhanced damage` by `150%` for `10 seconds`",
+      "- Increases `fire/cold/lightning/poison/magic mastery` by `50%` for `10 second`s`"
+    ]
+  },
+  {
+    "id": "necromancer-class-changes",
+    "title": "Necromancer class changes",
+    "text": [
+      "- Bone spear:",
+      "  - Name changed to Shattered Marrow",
+      "  - On hit it forks to nearby enemies",
+      "  - Gain additional forks at base level 10 an 20",
+      "- Bone spirit:",
+      "  - No longer tracks enemies",
+      "  - On impact with enemy or wall, leaves a unholy ground that deals magic damage over time",
+      "  - Projectile can pierce, leaving DoT ground on contact with every enemy",
+      "  - DoT ground stacks",
+      "  - Gains additional projectile at base level 20",
+      "- Lower resist curse:",
+      "  - Will now also reduce magic resist but at half the rate of elemental resistances reduction",
+      "- Revives:",
+      "  - Now permanent"
+    ]
+  },
+  {
+    "id": "sorceress-class-changes",
+    "title": "Sorceress class changes",
+    "text": [
+      "- Glacial Spike",
+      "  - Glacial Spike no longer freezes and explodes",
+      "  - Now forks to max 3 nearby enemies (starts at 1, 1 additional at levels 15 and 25)"
+    ]
+  },
+  {
+    "id": "paladin-class-changes",
+    "title": "Paladin class changes",
+    "text": [
+      "- Defiance:",
+      "  - Now receives +1% to maximum Physical Resistance per 10 levels",
+      "- Divine Judgement:",
+      "  - Entirely new skill that was has replaced `Holy Nova`",
+      "  - Requires level 30",
+      "  - Hitting the enemy creates holy ground that deals magic damage over time and regenerates your HP",
+      "  - The initial hit deals splash damage",
+      "  - Converts 10% + 2% per base level (max 50%) to magic damage",
+      "  - The damage over time from ground effect benefits from magic mastery",
+      "  - The regeneration scales with LEVELS, not BASE LEVELS (so it does not stop at hard 20 points)",
+      "  - Has added Attack Rating bonus",
+      "- Holy Sword: ",
+      "  - No longer requires two handed sword to function - now works with every melee weapon type",
+      "  - No longer only adds % damage to undead and demons - now adds damage % to all enemies, but at half rate as before",
+      "  - Adds magic damage to your melee attacks"
+    ]
+  },
+  {
+    "id": "amazon-class-changes",
+    "title": "Amazon class changes",
+    "text": [
+      "- Tornado Shot:",
+      "  - New skill that replaced Guided Arrow",
+      "  - Shoots a projectile that creates a tornado at the end of its range or on collision, that lingers for 1 second",
+      "  - Tornado creates secondary projectiles",
+      "  - Main and secondary projectiles deal 20% of weapon damage",
+      "  - Has added Attack Rating bonus",
+      "  - Receives additional projectile on base level 20",
+      "  - The main projectiles do not pierce",
+      "  - Secondary projectiles do pierce",
+      "  - Can mana leech, life leech, critical/deadly strike, apply crushing blow",
+      "  - Can proc on striking effects",
+      "- Frostgale:",
+      "  - New skill that replaced Charged Strike",
+      "  - Hit your enemy and create multiple twisters",
+      "  - Both initial hit and twisters deal 75% of weapon damage",
+      "  - Both initial hit and twisters convert 50% of physical damage to cold",
+      "  - Twisters always hit",
+      "  - Has added Attack Rating bonus",
+      "  - Conjures 3 twisters at level 1",
+      "  - Conjure additional twister per 5 levels",
+      "  - Can mana leech, life leech, critical/deadly strike, apply crushing blow and proc effects",
+      "  - Can proc on striking effects",
+      "- Magic Arrow",
+      "  - Now receives synergy from Tornado Shot",
+      "- Lightning Strike",
+      "  - Now receives synergy from Frostgale"
+    ]
+  },
+  {
+    "id": "barbarian-class-changes",
+    "title": "Barbarian class changes",
+    "text": [
+      "- Natural Resistance:",
+      "  - Now also reduces poison length at the same rate as resistances (with diminishing returns; poison length reduced by 63% at level 20)",
+      "- Iron Skin:",
+      "  - Now adds 1% maximum fire, cold and lightning resistance every 10 base levels",
+      "- Perforate: ",
+      "  - Entirely new skill that replaced `Stun`",
+      "  - Requires level 6",
+      "  - Strike the enemy, unearthing spikes from the ground, that move forward and deal damage to enemies",
+      "  - Each spike deals damage separately equal to 50% of your weapon damage",
+      "  - Initial hit deals damage equal to 50% of your weapon damage",
+      "  - Create 2 spikes at first level and get additional spikes every 10 levels",
+      "  - Leeches life and mana",
+      "  - Can proc on strike modifiers",
+      "  - Added Attack Rating bonus",
+      "- Frenzy",
+      "  - No longer requires two weapons to work",
+      "  - Synergy changed from Perforate to Bash"
+    ]
+  }
+]

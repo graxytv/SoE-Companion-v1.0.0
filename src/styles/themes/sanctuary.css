@@ -1,0 +1,56 @@
+/* Sanctuary Gothic - default SoE theme */
+[data-theme="sanctuary"] {
+  --bg-primary: #080706;
+  --bg-secondary: #12100d;
+  --bg-tertiary: #1c1712;
+  --bg-elevated: #241d16;
+
+  --text-primary: #f0e2c2;
+  --text-secondary: #b9a98b;
+  --text-muted: #756956;
+  --text-disabled: #51483a;
+
+  --border-primary: #35291d;
+  --border-secondary: #54402b;
+  --border-hover: #7c5d35;
+
+  --accent-primary: #d8a743;
+  --accent-primary-hover: #f0c45a;
+  --accent-primary-muted: rgba(216, 167, 67, 0.18);
+
+  --accent-secondary: #7b1712;
+  --accent-secondary-hover: #a4241a;
+  --accent-secondary-muted: rgba(123, 23, 18, 0.2);
+
+  --status-success: #315d2d;
+  --status-success-text: #73bf5f;
+  --status-warning: #7b5519;
+  --status-warning-text: #d8a743;
+  --status-error: #761713;
+  --status-error-text: #e45845;
+  --status-info: #2f4767;
+  --status-info-text: #8faed0;
+
+  --btn-primary-bg: linear-gradient(#e1b44e, #9c6d24);
+  --btn-primary-text: #130c05;
+  --btn-primary-hover: linear-gradient(#f0c45a, #b9802d);
+  --btn-secondary-bg: linear-gradient(#221b14, #130f0b);
+  --btn-secondary-text: var(--text-primary);
+  --btn-secondary-border: var(--border-secondary);
+  --btn-secondary-hover: #2b2117;
+  --btn-danger-bg: linear-gradient(#8d2118, #54100d);
+  --btn-danger-text: #fff1dd;
+  --btn-danger-hover: linear-gradient(#aa2b20, #68140f);
+
+  --input-bg: #0e0c09;
+  --input-border: var(--border-primary);
+  --input-border-focus: var(--accent-primary);
+  --input-placeholder: var(--text-muted);
+
+  --panel-bg: linear-gradient(180deg, rgba(28, 23, 18, 0.96), rgba(12, 10, 8, 0.98));
+  --panel-border: var(--border-primary);
+  --panel-header-bg: #1c1712;
+  --overlay-panel-bg: rgba(10, 8, 6, 0.9);
+  --overlay-panel-border: rgba(216, 167, 67, 0.48);
+  --notification-bg-rgb: 10, 8, 6;
+}

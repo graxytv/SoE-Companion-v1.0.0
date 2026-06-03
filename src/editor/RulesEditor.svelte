@@ -1,0 +1,304 @@
+<script lang="ts">
+  import { onMount, onDestroy } from "svelte";
+  import { Compartment, EditorState, type Extension } from "@codemirror/state";
+  import {
+    EditorView,
+    keymap,
+    highlightActiveLine,
+    highlightActiveLineGutter,
+    drawSelection,
+    dropCursor,
+    rectangularSelection,
+    crosshairCursor,
+    highlightSpecialChars,
+  } from "@codemirror/view";
+  import {
+    defaultKeymap,
+    history,
+    historyKeymap,
+    indentWithTab,
+  } from "@codemirror/commands";
+  import { bracketMatching } from "@codemirror/language";
+  import {
+    acceptCompletion,
+    closeBrackets,
+    closeBracketsKeymap,
+  } from "@codemirror/autocomplete";
+  import { lintGutter, setDiagnostics } from "@codemirror/lint";
+
+  import { d2rules } from "./d2rules-language";
+  import {
+    getDarkThemeExtensions,
+    getLightThemeExtensions,
+  } from "./d2rules-theme";
+  import { d2rulesLinter, type ValidationResult } from "./d2rules-linter";
+  import { d2rulesAutocomplete } from "./d2rules-autocomplete";
+  import { d2rulesHover } from "./d2rules-hover";
+  import { itemsDictionaryStore } from "../stores";
+
+  /** Pick the editor theme that matches the active app theme. Reads the
+   *  `data-theme` attribute on `<html>`, which `settingsStore.applyTheme`
+   *  keeps in sync. */
+  function themeExtensionsForCurrentMode(): Extension[] {
+    const mode = document.documentElement.getAttribute("data-theme");
+    return mode === "light" || mode === "horadric"
+      ? getLightThemeExtensions()
+      : getDarkThemeExtensions();
+  }
+
+  interface Props {
+    /** Editor content (two-way bindable) */
+    value?: string;
+    /** Make editor read-only */
+    readonly?: boolean;
+    /** Additional CSS class */
+    class?: string;
+    /** Called when content changes */
+    onchange?: (value: string) => void;
+    /** Called when Ctrl+S is pressed */
+    onsave?: (value: string) => void;
+    /** Called after validation completes with results */
+    onvalidate?: (result: ValidationResult) => void;
+    /** Enable backend DSL validation. Disable for native ProjectD2 filters. */
+    validate?: boolean;
+  }
+
+  let {
+    value = $bindable(""),
+    readonly = false,
+    class: className = "",
+    onchange,
+    onsave,
+    onvalidate,
+    validate = true,
+  }: Props = $props();
+
+  let container: HTMLDivElement;
+  let view: EditorView | null = null;
+  const themeCompartment = new Compartment();
+  let themeObserver: MutationObserver | null = null;
+
+  // Track if we're updating from external value change
+  let isExternalUpdate = false;
+
+  /**
+   * Build editor extensions
+   */
+  function buildExtensions(): Extension[] {
+    const extensions: Extension[] = [
+      // Basic editor features
+      highlightSpecialChars(),
+      history(),
+      drawSelection(),
+      dropCursor(),
+      EditorState.allowMultipleSelections.of(true),
+      rectangularSelection(),
+      crosshairCursor(),
+      highlightActiveLine(),
+      highlightActiveLineGutter(),
+
+      // Soft word wrap
+      EditorView.lineWrapping,
+
+      lintGutter(),
+
+      // Bracket handling
+      bracketMatching(),
+      closeBrackets(),
+
+      // Keymaps
+      keymap.of([
+        ...closeBracketsKeymap,
+        { key: "Tab", run: acceptCompletion },
+        ...defaultKeymap,
+        ...historyKeymap,
+        indentWithTab,
+      ]),
+
+      // D2 Rules DSL language
+      d2rules(),
+
+      // Theme (swapped dynamically via compartment on app theme change)
+      themeCompartment.of(themeExtensionsForCurrentMode()),
+
+      d2rulesAutocomplete(() => itemsDictionaryStore.options),
+
+      d2rulesHover(),
+
+      // Listen for document changes
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged && !isExternalUpdate) {
+          const newValue = update.state.doc.toString();
+          value = newValue;
+          onchange?.(newValue);
+
+          // Clear diagnostics immediately when user starts typing
+          // They will reappear after the debounced linter runs
+          update.view.dispatch(setDiagnostics(update.state, []));
+        }
+      }),
+    ];
+
+    if (validate) {
+      extensions.push(d2rulesLinter(500, onvalidate));
+    }
+
+    // Ctrl+S / Cmd+S to save
+    if (onsave) {
+      extensions.push(
+        keymap.of([
+          {
+            key: "Mod-s",
+            run: () => {
+              onsave(view?.state.doc.toString() ?? value);
+              return true;
+            },
+            preventDefault: true,
+          },
+        ])
+      );
+    }
+
+    // Read-only mode
+    if (readonly) {
+      extensions.push(EditorState.readOnly.of(true));
+    }
+
+    return extensions;
+  }
+
+  onMount(() => {
+    view = new EditorView({
+      state: EditorState.create({
+        doc: value,
+        extensions: buildExtensions(),
+      }),
+      parent: container,
+    });
+
+    // Watch <html data-theme> for changes and reconfigure the editor's theme
+    // compartment so the editor tracks the app-wide theme toggle.
+    themeObserver = new MutationObserver(() => {
+      view?.dispatch({
+        effects: themeCompartment.reconfigure(themeExtensionsForCurrentMode()),
+      });
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  });
+
+  onDestroy(() => {
+    themeObserver?.disconnect();
+    themeObserver = null;
+    view?.destroy();
+    view = null;
+  });
+
+  // Sync external value changes to editor
+  $effect(() => {
+    if (view && value !== view.state.doc.toString()) {
+      isExternalUpdate = true;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: value,
+        },
+      });
+      isExternalUpdate = false;
+    }
+  });
+
+  /**
+   * Focus the editor
+   */
+  export function focus() {
+    view?.focus();
+  }
+
+  /**
+   * Get current content
+   */
+  export function getContent(): string {
+    return view?.state.doc.toString() ?? value;
+  }
+</script>
+
+<div bind:this={container} class="rules-editor {className}"></div>
+
+<style>
+  .rules-editor {
+    height: 100%;
+    overflow: hidden;
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--border-primary, #2a2a35);
+    background: var(--bg-secondary, #1a1a1f);
+  }
+
+  .rules-editor :global(.cm-editor) {
+    height: 100%;
+  }
+
+  .rules-editor :global(.cm-scroller) {
+    overflow: auto;
+    font-family: var(--font-mono, "Fira Code", "Consolas", monospace);
+  }
+
+  /* Lint gutter icon styling */
+  .rules-editor :global(.cm-lint-marker-error) {
+    content: "●";
+  }
+
+  .rules-editor :global(.cm-lint-marker-warning) {
+    content: "●";
+  }
+
+  /* Diagnostic tooltip styling */
+  .rules-editor :global(.cm-tooltip-lint) {
+    background: var(--bg-elevated, #252530);
+    border: 1px solid var(--border-primary, #2a2a35);
+    border-radius: var(--radius-sm, 4px);
+    padding: 4px 8px;
+    font-size: var(--text-sm, 13px);
+    color: var(--text-primary, #e8e6e3);
+    font-family: var(--font-sans, system-ui);
+  }
+
+  /* Ensure inner text in tooltips остаётся читабельным в обеих темах */
+  .rules-editor :global(.cm-tooltip-lint *) {
+    font-family: inherit;
+    color: inherit;
+  }
+
+  .rules-editor :global(.cm-diagnostic) {
+    padding: 4px 8px;
+    margin: 0;
+  }
+
+  .rules-editor :global(.cm-diagnostic-error) {
+    border-left: 3px solid var(--stat-fire, #ff4444);
+  }
+
+  .rules-editor :global(.cm-diagnostic-warning) {
+    border-left: 3px solid var(--quality-rare, #ffff00);
+  }
+
+  .rules-editor :global(.cm-diagnostic-info) {
+    border-left: 3px solid var(--quality-magic, #6969ff);
+  }
+
+  .rules-editor :global(.cm-tooltip-hover-explain) {
+    background: var(--bg-elevated, #252530);
+    border: 1px solid var(--border-primary, #2a2a35);
+    border-radius: var(--radius-sm, 4px);
+    padding: 8px 12px;
+    font-size: var(--text-sm, 13px);
+    line-height: 1.5;
+    color: var(--text-primary, #e8e6e3);
+    font-family: var(--font-sans, system-ui);
+    max-width: 480px;
+    white-space: pre-line;
+  }
+</style>

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Frontend and Tauri build output
+dist/
+target/
+target-*/
+src-tauri/target/
+src-tauri/target-*/
+fallback-known-good/
+
+# Local caches
+.svelte-kit/
+.vite/
+.turbo/
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+tauri-private-key*
+TAURI_SIGNING_PRIVATE_KEY*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo

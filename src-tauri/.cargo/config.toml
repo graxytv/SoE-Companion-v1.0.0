@@ -1,0 +1,14 @@
+[build]
+# Default target: 32-bit Windows (i686).
+# To build 64-bit: pnpm tauri build --target x86_64-pc-windows-msvc
+target = "i686-pc-windows-msvc"
+rustflags = ["-Awarnings"]
+
+[target.i686-pc-windows-msvc]
+# 32-bit Windows release target (default).
+rustflags = ["-Awarnings"]
+
+[target.x86_64-pc-windows-msvc]
+# 64-bit Windows release target.
+# Build with: pnpm tauri build --target x86_64-pc-windows-msvc
+rustflags = ["-Awarnings"]

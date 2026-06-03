@@ -1,0 +1,56 @@
+/* Horadric Parchment - readable tome theme */
+[data-theme="horadric"] {
+  --bg-primary: #efe2bf;
+  --bg-secondary: #e5d3a5;
+  --bg-tertiary: #d7bf86;
+  --bg-elevated: #f6eac9;
+
+  --text-primary: #24180d;
+  --text-secondary: #5d4325;
+  --text-muted: #8b714a;
+  --text-disabled: #b9a47c;
+
+  --border-primary: #b89554;
+  --border-secondary: #9a783b;
+  --border-hover: #76551f;
+
+  --accent-primary: #7d4e14;
+  --accent-primary-hover: #9b641f;
+  --accent-primary-muted: rgba(125, 78, 20, 0.18);
+
+  --accent-secondary: #7a2317;
+  --accent-secondary-hover: #982f21;
+  --accent-secondary-muted: rgba(122, 35, 23, 0.14);
+
+  --status-success: #3f6f2e;
+  --status-success-text: #2f6421;
+  --status-warning: #805715;
+  --status-warning-text: #805715;
+  --status-error: #7a2317;
+  --status-error-text: #7a2317;
+  --status-info: #315a75;
+  --status-info-text: #315a75;
+
+  --btn-primary-bg: #7d4e14;
+  --btn-primary-text: #fff7df;
+  --btn-primary-hover: #9b641f;
+  --btn-secondary-bg: #f0dfb6;
+  --btn-secondary-text: var(--text-primary);
+  --btn-secondary-border: var(--border-secondary);
+  --btn-secondary-hover: #e3c98f;
+  --btn-danger-bg: #7a2317;
+  --btn-danger-text: #fff7df;
+  --btn-danger-hover: #982f21;
+
+  --input-bg: #f8edcf;
+  --input-border: var(--border-primary);
+  --input-border-focus: var(--accent-primary);
+  --input-placeholder: var(--text-muted);
+
+  --panel-bg: linear-gradient(180deg, #f0dfb6, #dfc78c);
+  --panel-border: var(--border-primary);
+  --panel-header-bg: #d7bf86;
+  --overlay-panel-bg: rgba(239, 226, 191, 0.92);
+  --overlay-panel-border: rgba(125, 78, 20, 0.58);
+  --notification-bg-rgb: 239, 226, 191;
+}

@@ -1,0 +1,56 @@
+/* Hellfire - high-drama ember theme */
+[data-theme="hellfire"] {
+  --bg-primary: #070303;
+  --bg-secondary: #130605;
+  --bg-tertiary: #240b08;
+  --bg-elevated: #35100b;
+
+  --text-primary: #ffe8c8;
+  --text-secondary: #d9a26f;
+  --text-muted: #875b42;
+  --text-disabled: #57382c;
+
+  --border-primary: #4b160f;
+  --border-secondary: #762317;
+  --border-hover: #b43a23;
+
+  --accent-primary: #ffb13b;
+  --accent-primary-hover: #ffd16f;
+  --accent-primary-muted: rgba(255, 136, 28, 0.2);
+
+  --accent-secondary: #c22917;
+  --accent-secondary-hover: #ef3a22;
+  --accent-secondary-muted: rgba(194, 41, 23, 0.24);
+
+  --status-success: #365d28;
+  --status-success-text: #82d05d;
+  --status-warning: #9c4d12;
+  --status-warning-text: #ffb13b;
+  --status-error: #8b130d;
+  --status-error-text: #ff5544;
+  --status-info: #2c4d75;
+  --status-info-text: #80aee8;
+
+  --btn-primary-bg: linear-gradient(#ffb13b, #a83a12);
+  --btn-primary-text: #140402;
+  --btn-primary-hover: linear-gradient(#ffd16f, #c54a18);
+  --btn-secondary-bg: #240b08;
+  --btn-secondary-text: var(--text-primary);
+  --btn-secondary-border: var(--border-secondary);
+  --btn-secondary-hover: #35100b;
+  --btn-danger-bg: linear-gradient(#d73320, #7b130d);
+  --btn-danger-text: #fff3e0;
+  --btn-danger-hover: linear-gradient(#ef3a22, #9b1a10);
+
+  --input-bg: #100504;
+  --input-border: var(--border-primary);
+  --input-border-focus: var(--accent-primary);
+  --input-placeholder: var(--text-muted);
+
+  --panel-bg: linear-gradient(180deg, rgba(36, 11, 8, 0.98), rgba(7, 3, 3, 0.98));
+  --panel-border: var(--border-primary);
+  --panel-header-bg: #240b08;
+  --overlay-panel-bg: rgba(9, 3, 2, 0.92);
+  --overlay-panel-border: rgba(255, 112, 34, 0.58);
+  --notification-bg-rgb: 9, 3, 2;
+}

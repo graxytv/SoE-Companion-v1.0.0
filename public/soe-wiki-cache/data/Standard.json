@@ -1,0 +1,422 @@
+[
+  {
+    "id": "about",
+    "title": "About Standard Mode",
+    "text": [
+		"- Standard mode is the default way of playing Sanctuary of Exile",
+		"- It features increased drop rates in relation to vanilla Project Diablo 2 aswell as quality of life changes",
+		"- Below you will find changes and new features that were introduced in Standard Mode"
+    ]
+  },
+  {
+    "id": "unique-item-drop-changes",
+    "title": "Unique item drop changes",
+    "text": [
+      "- Unique items ratio has been improved, meaning all unique items drop rate has been increased",
+      "- Additionally, bosses, champions, unique and super unique monsters have higher chance to drop a unique"
+    ]
+  },
+  {
+    "id": "general-drop-rate-changes",
+    "title": "General drop rate changes",
+    "text": [
+      "- Runes are 5 times less likely to downgrade to lower tier during drop generation in Hell LoD content and T1-T3 maps",
+      "- Countness always drops three runes",
+      "- Demonic Cube has increased drop rate - 1:5000 in Normal",
+      "- Demonic Cube has increased drop rate - 1:3000 in Nightmare",
+      "- Demonic Cube has increased drop rate - 1:2500 in Hell",
+      "- Larzuk Puzzle Piece has increased drop rate - 1:6000 in Normal",
+      "- Larzuk Puzzle Piece has increased drop rate - 1:3000 in Nightmare",
+      "- Larzuk Puzzle Piece has increased drop rate - 1:1000 in Hell",
+      "- Larzuk Puzzle Box has increased drop rate - 1:12000 in Normal",
+      "- Larzuk Puzzle Box has increased drop rate - 1:6000 in Nightmare",
+      "- Larzuk Puzzle Box has increased drop rate - 1:2000 in Hell",
+      "- Skeleton Key has increased drop rate - 1:100 000 in Hell",
+      "- Horadrim Navigator has increased drop rate - 1:100 000 in Hell",
+      "- Horadrim Almanac has increased drop rate - 1:100 000 in Hell",
+      "- Lilith Mirror has increased drop rate - 1:500 000 in Hell",
+      "- Vial of the Lightsong has increased drop rate - 1:100 000 in Hell",
+      "- WSS in corrupted zones has 1:25 drop rate (from 1:300)",
+      "- Unique map drop rate from monsters has increased drop rate to 1:36500",
+      "- Unique map drop rate from bosses has increased drop rate to 1:3000",
+      "- Twisted essence of suffering drop rate from Normal Andariel is 28% (Quest - 35%)",
+      "- Twisted essence of suffering drop rate from Nightmare Andariel is 28% (Quest - 35%)",
+      "- Twisted essence of suffering drop rate from Hell Andariel is 28% (Quest - 36%)",
+      "- Twisted essence of suffering drop rate from Normal Duriel is 28% (Quest - 35%)",
+      "- Twisted essence of suffering drop rate from Nightmare Duriel is 28% (Quest - 35%)",
+      "- Twisted essence of suffering drop rate from Hell Duriel is 28% (Quest - 35%)",
+      "- Charged Essence of Hatred drop rate from Normal Mephisto is 28% (Quest - 31%)",
+      "- Charged Essence of Hatred drop rate from Nightmare Mephisto is 28% (Quest - 31%)",
+      "- Charged Essence of Hatred drop rate from Hell Mephisto is 28% (Quest - 31%)",
+      "- Burning Essence of Terror drop rate from Normal Diablo is 28% (Quest - 31%)",
+      "- Burning Essence of Terror drop rate from Nightmare Diablo is 28% (Quest - 31%)",
+      "- Burning Essence of Terror drop rate from Hell Diablo is 28% (Quest - 31%)",
+      "- Festering Essence of Destruction drop rate from Hell Baal is 28% (Quest - 31%)",
+      "- Festering Essence of Destruction drop rate from Hell Baal is 28% (Quest - 31%)",
+      "- Festering Essence of Destruction drop rate from Hell Baal is 28% (Quest - 31%)",
+      "- Key of Terror drop rate from Countness and Blood Raven is 29%",
+      "- Key of Hate drop rate from Summoner and Bloodwitch is 31%",
+      "- Key of Destruction drop rate from Nihlathak and Izual is 29%"
+    ]
+  },
+  {
+    "id": "uber-materials-drop-rate-changes",
+    "title": "Uber materials drop rate changes",
+    "text": [
+      "- Rathma Jawbone has increased drop rate in Hell to 1:1300",
+      "- Demonic Insignia from Abaddon, Pit of Acheron, Infernal Pit monsters has increased drop rate in Hell to 1:150",
+      "- Talisman of Transgression from corrupted zones enemies has increased drop rate to 1:100",
+      "- Flesh of Malic from demon enemies has increased drop rate to 1:1300",
+      "- Uber Ancients keys in maps have 1:1700 drop rate",
+      "- Pure Demonic Essence drop rate from map bosses was increased to ~40%",
+      "- Prime Evil Soul drop rate from Hell Mephisto was increased to ~29%",
+      "- Prime Evil Soul drop rate from Hell Diablo was increased to ~31%",
+      "- Prime Evil Soul drop rate from Hell Baal was increased to ~33%"
+    ]
+  },
+  {
+    "id": "sacred-orb",
+    "title": "Sacred Orb",
+    "text": [
+      "- `Sacred Orb` is a currency that creates an imprint of a Runeword",
+      "- Please refer to about tab in [Sacreds tab](app:sacreds) for more information",
+      "- `Sacred Orb` code is `sror`"
+    ]
+  },
+  {
+    "id": "divine-orb",
+    "title": "Divine Orb",
+    "text": [
+      "- `Divine Orb` is a currency that allows upgrading `elite` bases to unique item on this base",
+      "- `Divine Orb` drops in: T1-T4 maps, from Uber Ancients, from Lucion Chests, from Shadow of Mendeln map event, from Treasure Fallen",
+      "- Please refer to [Cube recipes tab](app:cube:Divine Orb) for more information",
+      "- `Divine Orb` code is `dvo`"
+    ]
+  },
+  {
+    "id": "mythic-orb",
+    "title": "Mythic Orb",
+    "text": [
+      "- `Mythic Orb` is a currency that allows upgrading `normal/exceptional` bases to unique item on this base",
+      "- `Mythic Orb` drops in: Lord of Destruction content, T1-T4 maps, from Lucion Chests, from Shadow of Mendeln map event, from Treasure Fallen",
+      "- Please refer to [Cube recipes tab](app:cube:Mythic Orb) for more information",
+      "- `Mythic Orb` code is `mfo`"
+    ]
+  },
+  {
+    "id": "exalted-orb",
+    "title": "Exalted Orb",
+    "text": [
+      "- `Exalted Orb` is a currency that allows upgrading `normal/exceptional/elite` bases to set item on this base",
+      "- `Exalted Orb` drops in: Lord of Destruction content, T1-T4 maps, from Lucion Chests, from Shadow of Mendeln map event, from Treasure Fallen",
+      "- Please refer to [Cube recipes tab](app:cube:Exalted Orb) for more information",
+      "- `Exalted Orb` code is `exo`"
+    ]
+  },
+  {
+    "id": "map-currency-glyphs",
+    "title": "Map currency - Glyphs information",
+    "text": [
+      "- New map customization system has been introduced to Sanctuary of Exile. It allows the player to have more agency and adjust the level of rewards to the power level of your character",
+      "- Every map tier has an abstract modifier called `glyph weight` which is equal to the `tier` of the map:",
+      "  - T1 has glyph weight of 1",
+      "  - T2 has glyph weight of 2",
+      "  - T3 has glyph weight of 3",
+      "  -  T4 has glyph weight of 4",
+      "- Every glyph has the same weight, which is equal to 1",
+      "- Glyphs work only on `rare` maps",
+      "- Rerolling the map with `Infused Horadrim Orb` will remove the Glyph and won’t refund it",
+      "- Every glyph along its unique modifier adds % HP and % enhanced physical damage to monsters, which differs per map tier",
+      "- Increases monster HP by:",
+      "  - 5% on T1 map",
+      "  - 8% on T2 map",
+      "  - 10% on T3 map",
+      "  - 12% on T4 map",
+      "- Increases monster physical damage by:",
+      "  - 0% on T1 map",
+      "  - 5% on T2 map",
+      "  - 8% on T3 map",
+      "  - 12% on T4 map"
+    ]
+  },
+  {
+    "id": "map-currency-glyphs-mods",
+    "title": "Map currency - Glyphs modifiers",
+    "text": [
+      "- Glyph of Nemeses:",
+      "  - Adds additional `25% of unique monster packs` to the map - Stacks with itself",
+      "- Glyph of Corruption:",
+      "  - Monsters have `25% chance to drop a corrupted item` - this mod stack with itself",
+      "  - `Map boss drops additional 1-3 corrupted uniques` - this mod `DOES NOT` stack with itself",
+      "- Glyph of Adversaries:",
+      "  - Adds `additional map boss` - this mod `DOES NOT` stack with itself ",
+      "  - Map boss drops additional skillers - this mod `DOES NOT` stack with itself"
+    ]
+  },
+  {
+    "id": "map-currency-terrors",
+    "title": "Map currency - Terrors information",
+    "text": [
+      "- Terrors are a new endgame map currency that adds unusual and difficult monsters to a map. These monsters are biased towards some kind of loot, based on the type of Terror applied to a map",
+      "- Only one Terror can be applied to a map",
+      "- Terrors scale with map tiers - the rewards on T1 map are going to be worse than on higher tiers",
+      "- Terrors work only on `rare` maps",
+      "- Rerolling the map with `Infused Horadrim Orb` will remove the Glyph and won’t refund it",
+      "- Every glyph along its unique modifier adds % HP and % enhanced physical damage to monsters, which differs per map tier",
+      "- Increases monster HP by:",
+      "  - 15% on T1 map",
+      "  - 20% on T2 map",
+      "  - 25% on T3 map",
+      "  - 30% on T4 map",
+      "- Increases monster physical damage by:",
+      "  - 10% on T1 map",
+      "  - 15% on T2 map",
+      "  - 20% on T3 map",
+      "  - 25% on T4 map"
+    ]
+  },
+  {
+    "id": "map-currency-terrors-mods",
+    "title": "Map currency - Terrors mods",
+    "text": [
+      "- `Terror of Resplendence` - adds additional `Resplendent Horrors` which drop:",
+      "  - Up to 2 unique items on a T1 Map",
+      "  - Up to 3 unique items on a T2 Map",
+      "  - Up to 4 unique items on a T3 Map",
+      "  - Up to 5 unique items on a T4 Map",
+      "- `Terror of Opulence` - adds additional `Opulent Horrors` which drop:",
+      "  - Up to 1 currency item on a T1 Map",
+      "  - Up to 2 currency items on a T2 Map",
+      "  - Up to 3 currency items on a T3 Map",
+      "  - Up to 4 currency items on a T4 Map",
+      "- Can drop:",
+      "  - Glyphs",
+      "  - Chisels",
+      "  - Mythic Orb",
+      "  - Divine Orb",
+      "  - Sacred Orb - low chance",
+      "- `Terror of Ethereal` - adds additional `Ethereal Horrors` which drop:",
+      "  - Up to 1 rune on a T1 map",
+      "  - Up to 2 runes on a T2 map",
+      "  - Up to 3 runes on a T3 map",
+      "  - Up to 4 runes on a T4 map",
+	"- `Terror of Absolute` - adds additional `Absolute Horrors` which drop:",
+      "  - Up to 1 uber materials on a T1 map",
+      "  - Up to 2 uber materials on a T2 map",
+      "  - Up to 3 uber materials on a T3 map",
+      "  - Up to 4 uber materials on a T4 map"
+    ]
+  },
+  {
+    "id": "map-currency-chisels",
+    "title": "Map currency - Chisels information",
+    "text": [
+      "- New map customization system has been introduced to Sanctuary of Exile. It allows the player to have more agency and adjust the level of rewards to the power level of your character",
+      "- Every map tier can have maximum of two chisels applied to it",
+      "- Rerolling the map with `Infused Horadrim Orb` will remove the Chisels and won’t refund it",
+      "- Every chisel along its unique modifier adds % HP and % enhanced physical damage to monsters, which differs per map tier",
+      "- Increases monster HP by:",
+      "  - 5% on T1 map",
+      "  - 8% on T2 map",
+      "  - 10% on T3 map",
+      "  - 12% on T4 map",
+      "- Increases monster physical damage by:",
+      "  - 0% on T1 map",
+      "  - 5% on T2 map",
+      "  - 8% on T3 map",
+      "  - 12% on T4 map"
+    ]
+  },
+  {
+    "id": "map-currency-chisels-mods",
+    "title": "Map currency - Chisels mods",
+    "text": [
+      "- Cartographer's Chisel (basic): ",
+      "  - Increases player `gold % magic find` by `25%`",
+      "  - Increases `monster density` by `55%` on T1 map",
+      "  - Increases `monster density` by `65%` on T2 map",
+      "  - Increases `monster density` by `75%` on T3 map",
+      "  - Increases `monster density` by `75%` on T4 map",
+      "- Cartographer's Chisel of Avarice: ",
+      "  - Increases player `gold % magic find` by `75%`",
+      "  - Increases player `experience bonus` by `75%`",
+      "- Cartographer's Chisel of Procurement: ",
+      "  - Increases `monster density` by `85%` on T1 map",
+      "  - Increases `monster density` by `95%` on T2 map",
+      "  - Increases `monster density` by `105%` on T3 map",
+      "  - Increases `monster density` by `105%` on T4 map"
+    ]
+  },
+  {
+    "id": "map-currency",
+    "title": "Other map currency changes",
+    "text": [
+      "- `Anya` now sells infused map currency, so you don't have juggle runes and gems",
+      "- `Anya` now sells basic `Cartographer's Chisel`",
+      "- Corrupting the map with `World Stone Shard` will now increase monster HP% and % physical damage",
+      "- Increases monster HP by:",
+      "  - 5% on T1 map",
+      "  - 8% on T2 map",
+      "  - 10% on T3 map",
+      "  - 12% on T4 map",
+      "- Increases monster physical damage by:",
+      "  - 0% on T1 map",
+      "  - 5% on T2 map",
+      "  - 8% on T3 map",
+      "  - 12% on T4 map"
+    ]
+  },
+  {
+    "id": "ornate-charms",
+    "title": "Ornate charms",
+    "text": [
+      "- Ornate charms are horizontal 3x1 charms that drop only in maps",
+      "- Ornate charms can roll all of the affixes of Grand Charms",
+      "- Ornate charms have exclusive tier of affixes with higher values than obtainable on other charms",
+      "- Ornate charms can be re-rolled with the same Cube recipe as other charms",
+      "- Better affixes are available on Ornate Charms the higher the item level is",
+      "- Ornate charms code is `cm4`"
+    ]
+  },
+  {
+    "id": "mythical-jewels",
+    "title": "Mythical Jewels",
+    "text": [
+      "- Mythical jewels are a new tier of jewels that drop only in maps",
+      "- Mythical jewels can roll all of the affixes of regular jewels",
+      "- Mythical jewels have exclusive tier of affixes with higher values than obtainable on regular jewels",
+      "- Mythical jewels can be re-rolled with the same Cube recipe as regular jewels",
+      "- Better affixes are available on Mythical jewels the higher the item level is",
+      "- Please refer to [Mythical Jewel Cube Recipes](app:cube:mythical jewel recipes) for cube recipes",
+      "- Mythical Jewels code is `mjw`"
+    ]
+  },
+  {
+    "id": "mercenary-changes",
+    "title": "Mercenary Changes",
+    "text": [
+      "- Act 1 Hell mercenaries:",
+      "  - `Base HP` has been increased by 30% from 900 to 1170",
+      "  - `HP/lvl` has been increased by 20% from 30 to 36",
+      "  - `Base defense` increased by 35% from 744 to 1004",
+      "  - `Defense/lvl` has been increased by 20% from 22 to 26",
+      "  - `Evade` and `Dodge` passive abilities base levels improved from 5 to 13",
+      "- Act 2 Hell mercenaries:",
+      "  - `Base HP` has been increased by 25% from 1430 to 1787",
+      "  - `HP/lvl` has been increased by 20% from 40 to 50",
+      "  - `Base` defense increased by 40% from 1027 to 1438",
+      "  - `Defense/lvl` has been increased by 30% from 28 to 36",
+      "  - Now have `Combat Reflexes` on base level 15",
+      "- Act 3 Hell mercenaries:",
+      "  - `Base HP` has been increased by 30% from 1006 to 1307",
+      "  - `HP/lvl` has been increased by 25% from 27 to 34",
+      "  - `Base defense` increased by 35% from 640 to 832",
+      "  - `Defense/lvl` has been increased by 20% from 25 to 32",
+      "  - Now all variants of mercenary use level 12 `Chilling Armor`",
+      "- Act 4 Hell mercenaries:",
+      "  - `Base HP` has been increased by 30% from 1006 to 1307",
+      "  - `HP/lvl` has been increased by 25% from 27 to 34",
+      "  - `Base defense` increased by 35% from 640 to 832",
+      "  - `Defense/lvl` has been increased by 20% from 25 to 32",
+      "  - Chance to use `Bone Armor` has been increased from 12% to 25%",
+      "- Act 5 Hell mercenaries:",
+      "  - `Base HP` has been increased by 25% from 1422 to 1787",
+      "  - `HP/lvl` has been increased by 20% from 45 to 54",
+      "  - `Base defense` increased by 40% from 1027 to 1438",
+      "  - `Defense/lvl` has been increased by 30% from 28 to 36",
+      "  - Now have `Iron Skin` on base level 10"
+    ]
+  },
+  {
+    "id": "eternal-coin",
+    "title": "Eternal Coin",
+    "text": [
+      "- `Eternal Coin` is a new item that does not have use on it's own, but only as a component of few Cube recipes",
+      "- Bought from various vendors for `250k`",
+      "- Please refer to [Cube recipes tab](app:cube:Eternal Coin) for more information",
+      "- `Eternal coin` code is `ncoi`"
+    ]
+  },
+  {
+    "id": "jewellers-prims",
+    "title": "Jewellers prism",
+    "text": [
+      "- `Jewellers Prism` is a new item that is used to upgrade `magic Mythical and Regular jewels` to `rare`",
+      "- Bought from `Anya` for `500k`",
+      "- Please refer to [Cube recipes tab](app:cube:Prism) for more information",
+      "- `Jewellers Prism` code is `jewp`"
+    ]
+  },
+  {
+    "id": "gheeds-box",
+    "title": "Gheed's Curious Box",
+    "text": [
+      "- `Gheed's Crafting Box` is a currency that on cubing `twice` will reward the player with random stack of `50x Perfect Gems`",
+      "- Drops in A1 - A5 Hell, T1-T4 Maps, Treasure Fallen event, Shadow of Mendeln event",
+      "- `Gheed's Crafting Box` code is `gcbx`"
+    ]
+  },
+  {
+    "id": "charsis-box",
+    "title": "Charsi's Crafting Box",
+    "text": [
+      "- `Charsi's Crafting Box` is a currency that on cubing `twice` will reward the player with random stack of `5x Crafting Infusion`",
+      "- Drops in A1 - A5 Hell, T1-T4 Maps, Treasure Fallen event, Shadow of Mendeln event",
+      "- `Charsi's Crafting Box` code is `ccbx`"
+    ]
+  },
+  {
+    "id": "cartohraphers-box",
+    "title": "Cartographers's Box",
+    "text": [
+      "- `Cartographers's Box` is a currency that on cubing `twice` will reward the player with random stack of `5x Random Glyphs`, `5x Random Chisels` or `5x Catalyst Shard`",
+      "- Drops in A1 - A5 Hell, T1-T4 Maps, Treasure Fallen event, Shadow of Mendeln event",
+      "- `Cartographers's Box` code is `cabx`"
+    ]
+  },
+  {
+    "id": "boots-sockets",
+    "title": "Boots sockets",
+    "text": [
+      "- Boots are now able to have sockets",
+      "- `Normal tier boots` can have up to 1 socket",
+      "- `Exceptional tier boots` can have up to 2 sockets",
+      "- `Elite tier boots` can have up to 3 sockets",
+      "- Socketable socketed in boots count as socketed in helmet/chest"
+    ]
+  },
+  {
+    "id": "monster-changes",
+    "title": "Monster changes",
+    "text": [
+      "- Unique non-boss monsters on Hell difficulty damage bonus coefficient increased from 66% to 80%",
+      "- Champion monsters damage bonus coefficient increased from 66% to 80%"
+    ]
+  },
+  {
+    "id": "gambling-changes",
+    "title": "Gambling changes",
+    "text": [
+      "- Class bases are available in gambling",
+      "- More bases is available in gambling"
+    ]
+  },
+  {
+    "id": "vendor-changes",
+    "title": "NPC changes",
+    "text": [
+      "- Akara now sells Token of Absolution for 1 gold. Finally we may rejoice!"
+    ]
+  },
+  {
+    "id": "action-speed",
+    "title": "Action Speed",
+    "text": [
+      "- A new percentage modifier “+X% to Action Speed” that affects:",
+      "  - Total run/walk speed (multiplicatively)",
+      "  - Reduces the amount of `+% Increased Attack Speed` player needs to get to the next breakpoint"
+    ]
+  }
+]
+
+

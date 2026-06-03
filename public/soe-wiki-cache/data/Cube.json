@@ -1,0 +1,226 @@
+[
+		{
+		"id":"about",
+		"title":"About cube recipes",
+		"text": 
+		[
+			"- Below cube recipes are specific to Sanctuary of Exile",
+			"- All cube recipes from vanilla Project Diablo 2 work unless stated otherwise on this page",
+			"- Please refer to [Vanilla PD2 Wiki](https://wiki.projectdiablo2.com/wiki/Main_Page) for vanilla cube recipes"
+		]
+	},
+	{
+		"id":"infernal-kiln-recipes",
+		"title":"Infernal Kiln recipes",
+		"text": 
+		[
+			"- Uber Material conversion recipe for the same boss:",
+			"  - 15x Crystallised Cindersoul + Any uber material from:",
+			"  - Black Soulstone",
+			"  - Pure Demonic Essence",
+			"  - Prime Evil Soul",
+			"  - Demonic Insignia",
+			"  - Talisman of Transgression",
+			"  - Flesh of Malic",
+			"  - Pandemonium Key 1-3",
+			"  - Trang-oul Jawbone",
+			"  - Splinter of the Void",
+			"  - Hellfire Ashes",
+			"  - Sigil of Madawc",
+			"  - Sigil of Talic",
+			"  - Sigil of Korlic",
+			"  - Can only convert for the materials for the same boss",
+			"  - Has 90% chance to convert to any other material from the same boss",
+			"  - Has 10% chance for conversion to not result  in any change",
+			"- Gem multiplication recipe:",
+			"  - Any perfect gem in non-stacked form + 10x Crystallised Cindersoul = 50x of that gem",
+		    "- Crafting infusion creation recipe:",
+			"  - 15x Crystallised Cindersoul + 5x Jewel Fragment + 5x Perfect Gem (check below) = 5x Crafting Infusion:",
+			"  - Perfect Ruby = Blood Crafting Infusion",
+			"  - Perfect Amethyst = Caster Crafting Infusion",
+			"  - Perfect Emerald = Safety Crafting Infusion",
+			"  - Perfect Sapphire = Hitpower Crafting Infusion",
+			"  - Perfect Skull = Vampiric Crafting Infusion",
+			"  - Perfect Topaz = Bountiful Crafting Infusion",
+			"  - Perfect Diamond = Brilliant Crafting Infusion",
+			"- Obtain random Hellforged Unique:",
+			"  - 35x Crystallised Cindersoul + 5xMythic Orb = Random Hellforged Unique",
+			"  - Please mind that the roll outcomes are weighted",
+			"- Obtain targeted Hellforged Unique:",
+			"  - 50x Crystallised Cindersoul + Divine Orb + Unique you want to convert = Unique converted to Hellforged part, if it exists"
+		]
+	},
+	{
+		"id":"hellfire-torch-desecration",
+		"title":"Hellfire torch desecration",
+		"text": 
+		[
+			"- Lucion has 25% chance to drop `Desecration Orb`",
+			"- Desecration Orb can be used to desecrate your [Hellfire Torch](app:uniques:Hellfire Torch)",
+			"- There is 45% chance that your [Hellfire Torch](app:uniques:Hellfire Torch) will be destroyed to Hellfire Ashes",
+			"- All modifiers have equal weighting",
+			"- Demonic Cube can be used to remove the desecration status",
+			"- Possible mods:",
+			"  - +1 to All Skills",
+			"  - +1 to Attack Projectiles",
+			"  - +1 to Spell Projectiles",
+			"  - +1 to Attack Strikes",
+			"  - +[30-40]% Enhanced Damage",
+			"  - Cannot Be Frozen",
+			"  - +2% to ALL Maximum Resistances",
+			"  - All Resistances +[7-10]",
+			"  - Poison Length Reduced by 50%"
+		]
+	},
+	{
+		"id":"map-currency-recipes",
+		"title":"Map currency recipes",
+		"text": 
+		[
+			"- Rare T4 dungeons can be now re-rolled with Infused Horadrim Orb",
+			"- Cube a rare map with glyph to add bonus modifier - check [Glyphs](app:changes:glyphs) for more information",
+			"- Cube a rare map with terror to add bonus modifier - check [Terrors](app:changes:terrors) for more information"
+		]
+	},
+	{
+		"id":"mythic-orb-recipes",
+		"title":"Mythic Orb recipes",
+		"text": 
+		[
+			"- `White/Superior/Magic/Rare normal/exceptional tier item` + `Mythic Orb` = `Unique item on that base`",
+			"- `Magic Grand Charm` + `Mythic Orb` = `Gheed's Fortune`",
+			"- Result item will always be non-ethereal, even if the input item was ethereal",
+			"- Rings and amulets honor the rarity of the resulting unique item (please refer to `Occurence Chance` in `Uniques` tab)",
+			"- Rings can result in: Nagelring, Manald Heal, Raven Frost, Dwarf Star, Carrion Wind",
+			"- Amulets can result in: Nokozan Relic, The Cat's Eye, The Mahim Oak Curio, Saracen's Chance, Crescent Moon, The Eye of Etlich, Atma's Scarab"
+		]
+	},
+	{
+		"id":"divine-orb-recipes",
+		"title":"Divine Orb recipes",
+		"text": 
+		[
+			"- `White/Superior/Magic/Rare elite tier item` + `Divine Orb` = `Unique item on that base`",
+			"- `5x Jewel Fragment` + `Divine Orb` = `Random unique regular jewel`",
+			"- `Magic/Rare Mythical Jewel` + `Divine Orb` = `Random unique mythical jewel`",
+			"- `Magic Ornate Charm` + `3x Divine Orb` = `Random unique ornate charm`",
+			"- Result item will always be non-ethereal, even if the input item was ethereal",
+			"- Rings and amulets honor the rarity of the resulting unique item (please refer to `Occurence Chance` in `Uniques` tab)",
+			"- Rings can result in: The Stone of Jordan, Bul Katho's Wedding Band, Nature's Peace, Constricting Loop, Wisp Projector, Deaths Poise",
+			"- Amulets can result in: The Rising Sun, Highlord's Wrath, Mara's Kaleidoscope, Seraph's Hymn, Metalgrid, Defiance of Destiny, Astramentis",
+			"- You can now create Armageddon Blade in Cube - the recipe is `Phase Blade` + `5x Divine Orb` = `Armageddon Blade`"
+		]
+	},
+	{
+		"id":"exalted-orb-recipes",
+		"title":"Exalted Orb recipes",
+		"text": 
+		[
+			"- `White/Superior/Magic/Rare of any tier item` + `Exalted Orb` = `Set item on that base`",
+			"- Result item will always be non-ethereal, even if the input item was ethereal",
+			"- Rings and amulets honor the rarity of the resulting set item (please refer to `Occurence Chance` in `Set` tab)"
+		]
+	},
+	{
+		"id":"rune-downgrading",
+		"title":"Rune downgrading recipes",
+		"text": 
+		[
+			"- Runes from Eld to Pul can be downgraded with a recipe `Rune in stacked or non-stacked form` + `Key or Skeleton Key` = `3x Lower Rune`",
+			"- Runes from Um to Ber can be downgraded with a recipe `Rune in stacked or non-stacked form` + `Key or Skeleton Key` = `1x Lower Rune`",
+			"- Runes from Jah to Zod can be downgraded with a recipe `Rune in stacked or non-stacked form` + `1x Eternal Coin` = `1x Lower Rune` "
+		]
+	},
+	{
+		"id":"unsocketing",
+		"title":"Unsocketing recipes",
+		"text": 
+		[
+			"- You can now remove any item socket contents while preserving said content using Orb of Extraction",
+			"- `Orb of Extraction` + `Socketed Item` = `Used item with socket contents removed (preserves the contents)`",
+			"- Works with all socketable items, including RUNEWORDS", 
+			"- The item cannot be CORRUPTED",
+			"- Drop rates for “Orb of Extraction” are as follows:",
+			"  - In Normal, 1:20000 from all mobs",
+			"  - In Nightmare, 1:10000 from all mob",
+			"  - In Hell, 1:4000 from all mobs"
+		]
+	},
+	{
+		"id":"mythic-recipes",
+		"title":"Mythical Jewel recipes",
+		"text": 
+		[
+			"- `Regular/Mythic Magic jewel` + `Jeweller's Prism` = `Rare Regular/Mythic jewel`",
+			" - Magic/Rare Mythical Jewels can be re-rolled with `3x perfect gem`. Preserves the item level",
+			" - DO NOT USE PERFECT SKULL TO RE-ROLL, AS THIS WILL LOWER THE ILVL OF THE ITEM. IT IS HARDCODED BEHAVIOUR AND CANNOT BE CHANGED",
+			" - `Magic/Rare Mythical Jewel` + `Key` = `5 Jewel Fragments` - Works with up to 10 jewels at one time"
+		]
+	},
+	{
+		"id":"crafting-infusions-recipes",
+		"title":"Crafting infusions recipes",
+		"text": 
+		[
+			"- Crafting infusions can now craft on already crafted bases",
+			"- Crafting infusions can now be created in the Cube",
+			"- `Jewel Fragment` + `Perfect Ruby` + `Thul Rune` = `Blood Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Amethyst` + `Ral Rune` = `Caster Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Sapphire` + `Ral Rune` = `Hitpower Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Emerald` + `Ort Rune` = `Safety Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Skull` + `Shael Rune` = `Vampiric Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Topaz` + `Hel Rune` = `Bountiful Crafting Infusion`",
+			"- `Jewel Fragment` + `Perfect Diamond` + `Dol Rune` = `Brilliant Crafting Infusion`"
+		]
+	},
+	{
+		"id":"circlet-crafting",
+		"title":"Circlet crafting recipes",
+		"text": 
+		[
+			"- Circlets ([Circlet](app:armors:Circlet), [Coronet](app:armors:Coronet), [Tiara](app:armors:Tiara), [Diadem](app:armors:Diadem)) can now be crafted with crafting infusions",
+			"- Works with white and crafted bases",
+			"- Ehtereal status is preserved on craft"
+		]
+	},
+	{
+		"id":"currency-socketing-recipes",
+		"title":"Larzuk Puzzlebox recipes",
+		"text": 
+		[
+			"- Larzuk Puzzlebox can be used to re-roll the number of sockets",
+			"- Larzuk PuzzleBox will now give up to maximum number of sockets on base",
+			"- Rerolling number of sockets with above will DESTROY the contents",
+			"- Larzuk Puzzlebox can now be used on boots"
+		]
+	},
+	{
+		"id":"cains-wisdom",
+		"title":"Cain's Wisdom recipes",
+		"text": 
+		[
+			"- [Cain's Wisdom](app:uniques:Cain's Wisdom) is created by cubing one of each essence of `Suffering`, `Hatred`, `Terror`, `Destruction` and a `Small Magic Charm`",
+			"- Cain's Wisdom can be cubed with [Annihilus](app:uniques:Annihilus) to fuse the two together and transfer the bonus from Cain's to Annihilus"
+		]
+	},
+	{
+		"id":"liliths-mirror",
+		"title":"Lilith's mirror recipes",
+		"text": 
+		[
+			"- Lilith's Mirror can now be used in the cube with `non-corrupted unique/set armor/weapon/amulet/ring` to create exact copy of it - transfers sockets and ethereal status. Mirrored items can't be mirrored again",
+			"- Lilith's Mirror can now be used with `magic/rare/unique regular/mythic jewels` to create exact copy of it. Mirrored jewels can't be mirrored again"
+		]
+	},
+	{
+		"id":"demonic-cube",
+		"title":"Additional Demonic Cube recipes",
+		"text": 
+		[
+			"- Reroll unique jewel type:",
+			"  - `Demonic Cube` + `Eternal Coin` + `Rainbow Facet` = `Re-rolled type of unique jewel`",
+			"  - Can result in re-rolling to jewel of the same type",
+			"  - Eg. Can re-roll fire rainbow facet to poison one"
+		]
+	}
+]
