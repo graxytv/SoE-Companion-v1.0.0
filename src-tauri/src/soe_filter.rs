@@ -1,4 +1,6 @@
 use std::fs;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
@@ -56,6 +58,22 @@ fn preset_path(dir: &Path, safe_name: &str) -> PathBuf {
     dir.join(format!("{}.{}", safe_name, PRESET_EXT))
 }
 
+fn bundled_filter_marker_path(dir: &Path) -> PathBuf {
+    dir.join(format!("{}.bundled-hash", DEFAULT_FILTER_NAME))
+}
+
+fn bundled_filter_hash() -> String {
+    let mut hasher = DefaultHasher::new();
+    BUNDLED_FILTER.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
+fn text_hash(text: &str) -> String {
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
 fn modified_iso(path: &Path) -> Option<String> {
     path.metadata()
         .ok()
@@ -70,9 +88,25 @@ fn modified_iso(path: &Path) -> Option<String> {
 fn ensure_default_preset(app: &AppHandle) -> Result<(), String> {
     let dir = presets_dir(app)?;
     let path = preset_path(&dir, DEFAULT_FILTER_NAME);
-    if !path.exists() {
-        fs::write(path, BUNDLED_FILTER)
+    let marker_path = bundled_filter_marker_path(&dir);
+    let next_hash = bundled_filter_hash();
+    let previous_hash = fs::read_to_string(&marker_path).ok().map(|s| s.trim().to_string());
+    let should_write = if !path.exists() {
+        true
+    } else if previous_hash.is_none() {
+        true
+    } else if previous_hash.as_deref() == Some(next_hash.as_str()) {
+        false
+    } else {
+        let current_text = fs::read_to_string(&path).unwrap_or_default();
+        previous_hash.as_deref() == Some(text_hash(&current_text).as_str())
+    };
+
+    if should_write {
+        fs::write(&path, BUNDLED_FILTER)
             .map_err(|e| format!("Failed to seed bundled SoE filter preset: {}", e))?;
+        fs::write(&marker_path, &next_hash)
+            .map_err(|e| format!("Failed to save bundled SoE filter marker: {}", e))?;
     }
     Ok(())
 }
