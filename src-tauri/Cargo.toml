@@ -1,6 +1,6 @@
 [package]
 name = "soe-companion"
-version = "1.1.1"
+version = "1.1.2"
 description = "Sanctuary of Exile companion app for grail tracking, drops, achievements, filters, sounds, and overlays"
 authors = []
 license = ""

@@ -400,9 +400,8 @@ pub fn sync_shared_stash_runes(stash_path: Option<String>) -> Result<RuneStashSy
             fate_card_counts,
             fate_card_sync_available: false,
             scanned_files,
-            message:
-                "No pd2_shared.stash file was found. Select your shared stash file to sync runes."
-                    .to_string(),
+            message: "No pd2_shared.stash file was found. Shared-stash sync could not run."
+                .to_string(),
         });
     };
 

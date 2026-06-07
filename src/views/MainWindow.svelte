@@ -222,9 +222,7 @@
                 const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
                     stashPath: settingsStore.settings.runewordPlannerStashPath,
                 });
-                if (result.fate_card_sync_available !== false) {
-                    settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
-                }
+                settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
                 await emit("master-shared-stash-synced", result);
             } catch (error) {
                 console.warn("[MainWindow] Master shared-stash sync failed:", error);
@@ -268,11 +266,9 @@
         fateCardBackgroundSyncBusy = true;
         try {
             const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
-                stashPath: settingsStore.settings.runewordPlannerStashPath,
+                stashPath: null,
             });
-            if (result.fate_card_sync_available !== false) {
-                settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
-            }
+            settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
         } catch (error) {
             console.warn("[MainWindow] Background Fate Card stash sync failed:", error);
         } finally {

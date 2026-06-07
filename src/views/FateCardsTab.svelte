@@ -31,10 +31,8 @@
   let fateCardSearch = $state('');
   let fateCardMode = $state<'all' | 'owned' | 'full' | 'incomplete'>('all');
   let syncBusy = $state(false);
-  let syncMessage = $state('Shared-stash sync reads Fate Card item stacks from the selected pd2_shared.stash file.');
+  let syncMessage = $state('Fate Card counts auto-sync from the detected pd2_shared.stash file every 30 seconds.');
   let lastSyncAt = $state<string | null>(null);
-  let detectedStashPaths = $state<string[]>([]);
-  let stashPathDraft = $state('');
   let selectedDetails = $state<GrailItemDetails | null>(null);
   let backupBusy = $state(false);
   let backupMessage = $state('');
@@ -118,7 +116,7 @@
 
   function fateCardSyncStatus(result: RuneStashSyncResult): string {
     if (result.fate_card_sync_available === false) {
-      return 'No pd2_shared.stash file was found. Select your shared stash file to sync Fate Cards.';
+      return 'No pd2_shared.stash file was found. Fate Card stash counts were cleared.';
     }
     const total = Object.values(result.fate_card_counts ?? {}).reduce<number>(
       (sum, count) => sum + (Number(count) || 0),
@@ -128,32 +126,14 @@
     return `${total} Fate Card${total === 1 ? '' : 's'} synced from shared stash item slots.`;
   }
 
-  async function detectSharedStashPaths(): Promise<void> {
-    try {
-      const paths = await invoke<string[]>('detect_shared_stash_paths');
-      detectedStashPaths = paths;
-      const savedPath = settingsStore.settings.runewordPlannerStashPath;
-      if (!savedPath && paths[0]) {
-        settingsStore.setRunewordPlannerStashPath(paths[0]);
-        stashPathDraft = paths[0];
-      } else {
-        stashPathDraft = savedPath ?? paths[0] ?? '';
-      }
-    } catch (error) {
-      syncMessage = `Could not auto-detect shared stash files: ${error}`;
-    }
-  }
-
   async function syncFateCardsFromSharedStash(): Promise<void> {
     if (syncBusy) return;
     syncBusy = true;
     try {
       const result = await invoke<RuneStashSyncResult>('sync_shared_stash_runes', {
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
+        stashPath: null,
       });
-      if (result.fate_card_sync_available !== false) {
-        settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
-      }
+      settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
       lastSyncAt = new Date().toISOString();
       syncMessage = fateCardSyncStatus(result);
     } catch (error) {
@@ -163,19 +143,10 @@
     }
   }
 
-  function selectDetectedStashPath(event: Event): void {
-    const value = (event.currentTarget as HTMLSelectElement).value;
-    stashPathDraft = value;
-    settingsStore.setRunewordPlannerStashPath(value || null);
-    if (value) void syncFateCardsFromSharedStash();
-  }
-
-  function saveStashPath(): void {
-    const path = stashPathDraft.trim();
-    settingsStore.setRunewordPlannerStashPath(path || null);
-    syncMessage = path
-      ? 'Shared stash path saved. Use the header Sync button to refresh Fate Card counts.'
-      : 'Shared stash path cleared. Press Detect Stash to auto-detect again.';
+  function resetFateCardCounts(): void {
+    settingsStore.setFateCardCounts({});
+    lastSyncAt = new Date().toISOString();
+    syncMessage = 'Fate Card stash counts reset to 0. They will refill automatically when pd2_shared.stash has cards again.';
   }
 
   function openItemDetails(item: Parameters<typeof detailsForGrailItem>[0]): void {
@@ -229,14 +200,12 @@
 
   onMount(() => {
     const unlisteners: Array<() => void> = [];
-    stashPathDraft = settingsStore.settings.runewordPlannerStashPath ?? '';
-    void detectSharedStashPaths().then(() => syncFateCardsFromSharedStash());
+    void syncFateCardsFromSharedStash();
     void refreshBackupStatus();
     listen<RuneStashSyncResult>('master-shared-stash-synced', (event) => {
-      if (event.payload.fate_card_sync_available !== false) {
-        lastSyncAt = new Date().toISOString();
-        syncMessage = fateCardSyncStatus(event.payload);
-      }
+      settingsStore.setFateCardCounts(event.payload.fate_card_counts ?? {});
+      lastSyncAt = new Date().toISOString();
+      syncMessage = fateCardSyncStatus(event.payload);
     }).then((unlisten) => unlisteners.push(unlisten));
     const timer = window.setInterval(() => {
       void syncFateCardsFromSharedStash();
@@ -253,7 +222,7 @@
     <div>
       <h2 class="section-title fate-title">Fate Cards</h2>
       <p class="section-description fate-description">
-        Tracks card counts from shared stash item stacks, full-stack grail completion, and the dedicated Fate Cards overlay.
+        Tracks card counts from detected shared-stash item stacks and the dedicated Fate Cards overlay.
       </p>
     </div>
     <div class="progress-card">
@@ -271,36 +240,12 @@
         <div>
           <h2 class="section-title">Card List</h2>
           <p class="section-description">
-            Full stacks automatically complete the Fate Card Grail category.
+            Stash counts auto-detect <code>pd2_shared.stash</code>. Fate Card Grail completion is based on card drops, not current stash contents.
           </p>
         </div>
         <div class="action-row">
-          <Button variant="secondary" size="sm" onclick={detectSharedStashPaths}>Detect Stash</Button>
+          <Button variant="danger" size="sm" onclick={resetFateCardCounts}>Reset Fate Cards</Button>
         </div>
-      </div>
-
-      <div class="stash-path-card">
-        <label>
-          <span>Shared Stash File</span>
-          <select class="filter-select" value={settingsStore.settings.runewordPlannerStashPath ?? ''} onchange={selectDetectedStashPath}>
-            <option value="">Auto-detect pd2_shared.stash</option>
-            {#if settingsStore.settings.runewordPlannerStashPath && !detectedStashPaths.includes(settingsStore.settings.runewordPlannerStashPath)}
-              <option value={settingsStore.settings.runewordPlannerStashPath}>Saved custom path</option>
-            {/if}
-            {#each detectedStashPaths as path}
-              <option value={path}>{path}</option>
-            {/each}
-          </select>
-        </label>
-        <label class="stash-path-input">
-          <span>Manual Path</span>
-          <input
-            class="filter-input"
-            bind:value={stashPathDraft}
-            placeholder="C:\Program Files (x86)\Diablo II\Save\pd2_shared.stash"
-          />
-        </label>
-        <Button variant="secondary" size="sm" onclick={saveStashPath}>Save Path</Button>
       </div>
 
       <div class="summary-grid">
@@ -561,27 +506,6 @@
     gap: 8px;
   }
 
-  .stash-path-card {
-    display: grid;
-    grid-template-columns: minmax(220px, 0.7fr) minmax(300px, 1fr) auto;
-    align-items: end;
-    gap: 10px;
-    margin-bottom: 10px;
-    padding: 12px;
-    border: 1px solid var(--border-primary);
-    border-radius: 8px;
-    background: var(--bg-secondary);
-  }
-
-  .stash-path-card label {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 6px;
-    color: var(--text-secondary);
-    font-size: 12px;
-  }
-
   .filter-input,
   .filter-select {
     width: 100%;
@@ -591,11 +515,6 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     font-size: 13px;
-  }
-
-  .stash-path-card .filter-input,
-  .stash-path-card .filter-select {
-    background: var(--bg-primary);
   }
 
   .summary-grid {

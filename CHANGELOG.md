@@ -1,5 +1,13 @@
 # SoE Companion Changelog
 
+## 1.1.2
+
+- Simplified the Fate Cards tab so it auto-detects `pd2_shared.stash` instead of showing shared-stash detect and manual path controls.
+- Added a safe `Reset Fate Cards` button that only clears SoE Companion's local Fate Card stash-count cache and never edits the player's stash file.
+- Cleared stale Fate Card stash counts when `pd2_shared.stash` is missing, deleted, or unavailable.
+- Updated Fate Card page copy to clarify that stash counts are separate from drop-based Fate Card Grail completion.
+- Kept background Fate Card sync auto-detected so old saved custom stash paths do not preserve outdated card totals.
+
 ## 1.0.0
 
 - Initial public release of SoE Companion for Sanctuary of Exile single player.
