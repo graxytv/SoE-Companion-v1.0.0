@@ -3,8 +3,7 @@
 SoE Companion is a Windows companion app for Sanctuary of Exile built around drop tracking, Holy Grail progress, Fate Cards tracking, achievements, loot filter editing, item sounds/notifications and movable in-game overlays.
 
 The app is designed for players who want all their progress in one place!
-
-The app started as a small way for me to track some item drops and turned into a larger project.
+It started as a way for me to track item drops and turned into a larger project.
 
 PSA: This app is best used on a fresh start! You will need to delete your pd2_shared.stash file found in your save folder
 to delete account stats data. If you don't, you will have previous data bleeding into a new run. Just deleting your
