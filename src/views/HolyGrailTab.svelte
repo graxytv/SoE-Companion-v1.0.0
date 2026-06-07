@@ -1,6 +1,7 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from "@tauri-apps/api/core";
+  import { listen } from '@tauri-apps/api/event';
   import { Toggle, Button, SubTabs } from '../components';
   import { itemsDictionaryStore, settingsStore } from '../stores';
   import { playSound } from '../lib/sound-player';
@@ -38,6 +39,7 @@
     { id: 'notifications', label: 'Notifications' },
     { id: 'backup', label: 'Backup' },
   ];
+  const SHARED_STASH_SYNC_INTERVAL_MS = 30 * 1000;
 
   interface DropHookStatus {
     projectD2Dir: string;
@@ -77,7 +79,7 @@
   let hookStatus = $state<DropHookStatus | null>(null);
   let projectD2PathDraft = $state(settingsStore.settings.projectD2Path ?? '');
   let runeSyncBusy = $state(false);
-  let runeSyncMessage = $state('Runeword planner reads rune counts from the selected pd2_shared.stash Materials tab.');
+  let runeSyncMessage = $state('Shared-stash sync reads rune material counts and Fate Card item stacks from the selected pd2_shared.stash file.');
   let lastRuneSyncAt = $state<string | null>(null);
   let runeInventory = $state<RuneInventory>(emptyRuneInventory());
   let runewordSearch = $state('');
@@ -88,6 +90,8 @@
 
   interface RuneStashSyncResult {
     counts: Partial<Record<string, number>>;
+    fate_card_counts?: Partial<Record<string, number>>;
+    fate_card_sync_available?: boolean;
     scanned_files: string[];
     message: string;
   }
@@ -197,6 +201,7 @@
   }
 
   async function syncRunesFromSharedStash(): Promise<void> {
+    if (runeSyncBusy) return;
     runeSyncBusy = true;
     try {
       const savedPath = settingsStore.settings.runewordPlannerStashPath;
@@ -205,6 +210,9 @@
       });
       const scanned = normalizeRuneInventory(result.counts);
       runeInventory = scanned;
+      if (result.fate_card_sync_available !== false) {
+        settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
+      }
       lastRuneSyncAt = new Date().toISOString();
       runeSyncMessage = result.message;
     } catch (error) {
@@ -242,7 +250,7 @@
     const path = stashPathDraft.trim();
     settingsStore.setRunewordPlannerStashPath(path || null);
     runeSyncMessage = path
-      ? 'Shared stash path saved. Press Sync Now to refresh rune counts.'
+      ? 'Shared stash path saved. Use the header Sync button to refresh rune and Fate Card counts.'
       : 'Shared stash path cleared. Press Detect Stash to auto-detect again.';
   }
 
@@ -259,9 +267,14 @@
   }
 
   function qualitySortLabel(): string {
-    if (qualitySort === 'desc') return 'Quality Level ↓';
-    if (qualitySort === 'asc') return 'Quality Level ↑';
-    return 'Quality Level';
+    const label = categoryFilter === 'fateCards' ? 'Card Tier' : 'Quality Level';
+    if (qualitySort === 'desc') return `${label} ↓`;
+    if (qualitySort === 'asc') return `${label} ↑`;
+    return label;
+  }
+
+  function stackSizeHeaderLabel(): string {
+    return categoryFilter === 'fateCards' ? 'Full Stack Size' : 'Set Size';
   }
 
   function onRunewordCheckboxChange(runeword: { key: string; name: string }, event: Event): void {
@@ -406,7 +419,9 @@
       const importedKeys = new Set(Object.keys(found));
       for (const drop of drops) {
         const grailItem = findHolyGrailItem(drop.itemName);
-        if (grailItem && !importedKeys.has(grailItem.key)) {
+        if (grailItem?.category === 'fateCards') {
+          skipped++;
+        } else if (grailItem && !importedKeys.has(grailItem.key)) {
           settingsStore.setHolyGrailFound(grailItem.key, grailItem.name, grailItem.category, true);
           importedKeys.add(grailItem.key);
           matched++;
@@ -439,12 +454,24 @@
   });
 
   onMount(() => {
+    const unlisteners: Array<() => void> = [];
     stashPathDraft = settingsStore.settings.runewordPlannerStashPath ?? '';
     void detectSharedStashPaths().then(() => syncRunesFromSharedStash());
+    listen<RuneStashSyncResult>('master-shared-stash-synced', (event) => {
+      runeInventory = normalizeRuneInventory(event.payload.counts);
+      if (event.payload.fate_card_sync_available !== false) {
+        settingsStore.setFateCardCounts(event.payload.fate_card_counts ?? {});
+      }
+      lastRuneSyncAt = new Date().toISOString();
+      runeSyncMessage = event.payload.message;
+    }).then((unlisten) => unlisteners.push(unlisten));
     const timer = window.setInterval(() => {
       void syncRunesFromSharedStash();
-    }, 30 * 60 * 1000);
-    return () => window.clearInterval(timer);
+    }, SHARED_STASH_SYNC_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+      unlisteners.forEach((unlisten) => unlisten());
+    };
   });
 </script>
 
@@ -476,15 +503,12 @@
       <div>
         <h2 class="section-title">What RW Can I Make?</h2>
         <p class="section-description">
-          Syncs rune counts from your ProjectD2 shared stash about every 30 minutes, or when you press Sync Now. Makeable missing runewords are filtered against your Grail checklist.
+          Syncs rune counts and Fate Card stacks from your ProjectD2 shared stash about every 30 seconds, or from the header Sync button. Makeable missing runewords are filtered against your Grail checklist.
         </p>
       </div>
       <div class="runeword-actions">
         <Button variant="secondary" size="sm" onclick={detectSharedStashPaths}>
           Detect Stash
-        </Button>
-        <Button variant="primary" size="sm" disabled={runeSyncBusy} onclick={syncRunesFromSharedStash}>
-          {runeSyncBusy ? 'Syncing...' : 'Sync Now'}
         </Button>
       </div>
     </div>
@@ -514,7 +538,7 @@
     </div>
 
     <p class="materials-note">
-      This only reads rune counts from the <strong>Materials</strong> tab inside <code>pd2_shared.stash</code>. Runes in character inventory, cube, personal stash, or normal shared-bank item slots are not counted.
+      This reads rune material counts and Fate Card stacks inside <code>pd2_shared.stash</code>. Runes or cards in character inventory, cube, or personal stash are not counted.
     </p>
 
     <div class="runeword-sync-card">
@@ -832,6 +856,7 @@
           <span>Found</span>
           <span>Item</span>
           <button type="button" class="header-sort-button" onclick={toggleQualitySort}>{qualitySortLabel()}</button>
+          <span>{stackSizeHeaderLabel()}</span>
           <span>Category</span>
           <span>First Found</span>
         </div>
@@ -846,6 +871,7 @@
               {/if}
             </button>
             <span class="quality-level-cell">{item.qualityLevel != null ? item.qualityLevel : '-'}</span>
+            <span class="quality-level-cell">{item.fateCardAmountRequired != null ? item.fateCardAmountRequired : '-'}</span>
             <span>{holyGrailCategoryLabel(item.category)}</span>
             <span>{formatDate(entry?.firstFoundAt)}</span>
           </div>
@@ -1055,7 +1081,7 @@
   .empty-state { padding: 18px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); color: var(--text-muted); text-align: center; }
 
   .grail-table { overflow: hidden; border: 1px solid var(--border-primary); border-radius: 8px; }
-  .grail-row { display: grid; grid-template-columns: 60px minmax(180px, 1fr) 118px 140px 190px; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-secondary); font-size: 13px; }
+  .grail-row { display: grid; grid-template-columns: 60px minmax(180px, 1fr) 108px 78px 132px 178px; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border-primary); background: var(--bg-secondary); color: var(--text-secondary); font-size: 13px; }
   .grail-row:last-child { border-bottom: none; }
   .grail-header-row { background: var(--bg-tertiary, var(--bg-secondary)); color: var(--text-primary); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
   .header-sort-button { appearance: none; justify-self: start; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; font-weight: 800; padding: 0; text-align: left; text-transform: inherit; letter-spacing: inherit; }
@@ -1074,6 +1100,10 @@
   .item-name.category-sets { color: #d6a23a; }
   .item-name.category-runes { color: #ffdf6f; }
   .item-name.category-runewords { color: #f7f2df; }
+  .item-name.category-fateCards { color: #d7a8ff; }
+  .item-name.category-hatredOrbs { color: #ff6d6d; }
+  .item-name.category-essences { color: #f6c177; }
+  .item-name.category-ascendancy { color: #76e4c4; }
 
   .confirm-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); }
   .confirm-dialog { width: min(420px, calc(100vw - 48px)); padding: 20px; border: 1px solid var(--border-primary); border-radius: 10px; background: var(--bg-primary); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); }

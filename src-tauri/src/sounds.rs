@@ -65,7 +65,12 @@ fn validate_audio_file_name(file_name: &str) -> Result<String, String> {
     Ok(ext)
 }
 
-fn write_sound_slot(app: &AppHandle, slot: u32, file_name: &str, bytes: &[u8]) -> Result<String, String> {
+fn write_sound_slot(
+    app: &AppHandle,
+    slot: u32,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<String, String> {
     validate_slot(slot)?;
     if bytes.len() > MAX_BYTES {
         return Err(format!(
@@ -103,9 +108,9 @@ fn is_safe_filterblade_segment(segment: &str) -> bool {
         && !segment.contains("..")
         && !segment.contains('/')
         && !segment.contains('\\')
-        && segment
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '\''))
+        && segment.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.' | '\'')
+        })
 }
 
 fn encode_url_segment(segment: &str) -> String {

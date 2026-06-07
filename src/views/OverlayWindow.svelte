@@ -38,12 +38,13 @@
   import { findItemSoundRuleForDrop } from '../lib/item-sounds';
   import { MATERIAL_TRACKER_NAMES, materialTrackerNameFromDrop } from '../lib/material-tracker';
   import { OVERLAY_LAYOUT_WINDOWS, type OverlayLayoutKind } from '../lib/overlay-layout';
+  import { fateCardTrackerRows } from '../lib/soe-13-items';
 
   interface Props {
     mode?: 'game' | 'tracker';
   }
 
-  type TrackerOverlayKind = 'drops' | 'total' | 'grail' | 'materials' | 'runes' | 'achievements' | 'kills';
+  type TrackerOverlayKind = 'drops' | 'total' | 'grail' | 'materials' | 'runes' | 'fate-cards' | 'achievements' | 'kills';
   type PositionableOverlayKind = TrackerOverlayKind | 'notifications' | 'achievement-popup' | 'muling';
 
   interface GameWindowRect {
@@ -215,6 +216,16 @@
       .filter((rune) => runeTrackerOverlayRunes[rune])
       .map((rune) => ({ key: rune, label: rune, tier: runeCategory(rune), count: runeTrackerCounts[rune] ?? 0 })),
   );
+  let fateCardDropCounts = $derived(settingsStore.settings.fateCardDropCounts);
+  let fateCardTrackerOverlayEnabled = $derived(settingsStore.settings.fateCardTrackerOverlayEnabled);
+  let fateCardTrackerOverlayCards = $derived(settingsStore.settings.fateCardTrackerOverlayCards);
+  let fateCardTrackerOverlayTiers = $derived(settingsStore.settings.fateCardTrackerOverlayTiers);
+  let fateCardTrackerOverlayPosition = $derived(settingsStore.settings.fateCardTrackerOverlayPosition);
+  let fateCardTrackerOverlayWidth = $derived(settingsStore.settings.fateCardTrackerOverlayWidth);
+  let fateCardTrackerOverlayHeight = $derived(settingsStore.settings.fateCardTrackerOverlayHeight);
+  let fateCardRows = $derived(
+    fateCardTrackerRows(fateCardDropCounts, fateCardTrackerOverlayTiers, fateCardTrackerOverlayCards),
+  );
   let holyGrailFound = $derived(settingsStore.settings.holyGrailFound);
   let holyGrailOverlayEnabled = $derived(settingsStore.settings.holyGrailOverlayEnabled);
   let holyGrailOverlayShowTotal = $derived(settingsStore.settings.holyGrailOverlayShowTotal);
@@ -245,6 +256,7 @@
         holyGrailOverlayEnabled ||
         materialTrackerOverlayEnabled ||
         runeTrackerOverlayEnabled ||
+        fateCardTrackerOverlayEnabled ||
         achievementProgressOverlayEnabled ||
         monsterKillsOverlayEnabled
       ),
@@ -286,7 +298,7 @@
       dropsTrackerRecentItems: settingsStore.settings.dropsTrackerRecentItems,
       runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
       materialTrackerCounts: settingsStore.settings.materialTrackerCounts,
-      holyGrailFound: settingsStore.settings.holyGrailFound,
+      fateCardDropCounts: settingsStore.settings.fateCardDropCounts,
       achievementStats: settingsStore.settings.achievementStats,
     };
     // Emit a plain JSON payload rather than Svelte proxy objects. This keeps
@@ -309,6 +321,7 @@
     if (kind === 'grail') return holyGrailOverlayWidth;
     if (kind === 'materials') return materialTrackerOverlayWidth;
     if (kind === 'runes') return runeTrackerOverlayWidth;
+    if (kind === 'fate-cards') return fateCardTrackerOverlayWidth;
     if (kind === 'achievements') return achievementProgressOverlayWidth;
     return monsterKillsOverlayWidth;
   }
@@ -319,6 +332,7 @@
     if (kind === 'grail') return holyGrailOverlayHeight;
     if (kind === 'materials') return materialTrackerOverlayHeight;
     if (kind === 'runes') return runeTrackerOverlayHeight;
+    if (kind === 'fate-cards') return fateCardTrackerOverlayHeight;
     if (kind === 'achievements') return achievementProgressOverlayHeight;
     return monsterKillsOverlayHeight;
   }
@@ -351,6 +365,10 @@
       return `right: 12px; top: 12px; ${sizeStyle}`;
     }
 
+    if (fallback === 'fate-cards') {
+      return `left: 260px; top: 612px; ${sizeStyle}`;
+    }
+
     if (fallback === 'achievements') {
       return `left: 12px; top: 608px; ${sizeStyle}`;
     }
@@ -379,6 +397,7 @@
     if (kind === 'grail') return { x: 12, y: Math.max(0, gameRect.height - height - 220) };
     if (kind === 'materials') return { x: 12, y: 448 };
     if (kind === 'runes') return { x: right, y: 12 };
+    if (kind === 'fate-cards') return { x: 260, y: Math.min(bottom, 612) };
     if (kind === 'achievements') return { x: 12, y: 608 };
     return { x: 12, y: 708 };
   }
@@ -411,6 +430,7 @@
     if (kind === 'grail') return holyGrailOverlayEnabled;
     if (kind === 'materials') return materialTrackerOverlayEnabled;
     if (kind === 'runes') return runeTrackerOverlayEnabled;
+    if (kind === 'fate-cards') return fateCardTrackerOverlayEnabled;
     if (kind === 'achievements') return achievementProgressOverlayEnabled;
     if (kind === 'achievement-popup') return achievementSettings.overlayEnabled;
     if (kind === 'kills') return monsterKillsOverlayEnabled;
@@ -576,6 +596,7 @@
       else if (payload.kind === 'grail') settingsStore.setHolyGrailOverlayWidth(payload.width);
       else if (payload.kind === 'materials') settingsStore.setMaterialTrackerOverlayWidth(payload.width);
       else if (payload.kind === 'runes') settingsStore.setRuneTrackerOverlayWidth(payload.width);
+      else if (payload.kind === 'fate-cards') settingsStore.setFateCardTrackerOverlayWidth(payload.width);
       else if (payload.kind === 'achievements') settingsStore.setAchievementProgressOverlayWidth(payload.width);
       else settingsStore.setMonsterKillsOverlayWidth(payload.width);
     }
@@ -585,6 +606,7 @@
       else if (payload.kind === 'grail') settingsStore.setHolyGrailOverlayHeight(payload.height);
       else if (payload.kind === 'materials') settingsStore.setMaterialTrackerOverlayHeight(payload.height);
       else if (payload.kind === 'runes') settingsStore.setRuneTrackerOverlayHeight(payload.height);
+      else if (payload.kind === 'fate-cards') settingsStore.setFateCardTrackerOverlayHeight(payload.height);
       else if (payload.kind === 'achievements') settingsStore.setAchievementProgressOverlayHeight(payload.height);
       else settingsStore.setMonsterKillsOverlayHeight(payload.height);
     }
@@ -644,6 +666,11 @@
     runeTrackerOverlayRunes;
     runeTrackerOverlayWidth;
     runeTrackerOverlayHeight;
+    fateCardDropCounts;
+    fateCardTrackerOverlayCards;
+    fateCardTrackerOverlayTiers;
+    fateCardTrackerOverlayWidth;
+    fateCardTrackerOverlayHeight;
     holyGrailFound;
     dropsTrackerOverlayWidth;
     dropsTrackerOverlayHeight;
@@ -671,6 +698,8 @@
       settingsStore.setMaterialTrackerOverlayPosition(position);
     } else if (kind === 'runes') {
       settingsStore.setRuneTrackerOverlayPosition(position);
+    } else if (kind === 'fate-cards') {
+      settingsStore.setFateCardTrackerOverlayPosition(position);
     } else if (kind === 'achievements') {
       settingsStore.setAchievementProgressOverlayPosition(position);
     } else {
@@ -684,6 +713,7 @@
     if (kind === 'grail') return holyGrailOverlayPosition;
     if (kind === 'materials') return materialTrackerOverlayPosition;
     if (kind === 'runes') return runeTrackerOverlayPosition;
+    if (kind === 'fate-cards') return fateCardTrackerOverlayPosition;
     if (kind === 'achievements') return achievementProgressOverlayPosition;
     return monsterKillsOverlayPosition;
   }
@@ -704,6 +734,8 @@
       settingsStore.setMaterialTrackerOverlayPosition(position);
     } else if (kind === 'runes') {
       settingsStore.setRuneTrackerOverlayPosition(position);
+    } else if (kind === 'fate-cards') {
+      settingsStore.setFateCardTrackerOverlayPosition(position);
     } else if (kind === 'achievements') {
       settingsStore.setAchievementProgressOverlayPosition(position);
     } else {
@@ -828,6 +860,10 @@
     if (grailItem?.category === 'su') return ['unique'];
     if (grailItem?.category === 'ssu') return ['hellforged'];
     if (grailItem?.category === 'sets') return ['sets'];
+    if (grailItem?.category === 'fateCards') return ['fateCard'];
+    if (grailItem?.category === 'hatredOrbs') return ['hatredOrb'];
+    if (grailItem?.category === 'essences') return ['essence'];
+    if (grailItem?.category === 'ascendancy') return ['ascendancy'];
     if (!isUnidentifiedUniqueSetDrop(item) && hasTrustedExactUniqueSetName(item)) {
       return categorizeDrop(item);
     }
@@ -847,7 +883,9 @@
       materialAchievementNameFromDrop(item.base_name) ??
       materialAchievementNameFromDrop(displayName);
     const trackerMaterialName = materialTrackerNameFromDrop(item);
-    if (categories.length === 0 && !materialName && !trackerMaterialName) return;
+    const grailDropItem = holyGrailItemFromDrop(item);
+    const fateCardName = grailDropItem?.category === 'fateCards' ? grailDropItem.name : null;
+    if (categories.length === 0 && !materialName && !trackerMaterialName && !fateCardName) return;
 
     const debugSource = [
       item.source ?? 'scanner',
@@ -868,6 +906,9 @@
     }
     if (materialName) {
       settingsStore.recordAchievementMaterialDrop(materialName);
+    }
+    if (fateCardName) {
+      settingsStore.recordFateCardDrop(fateCardName);
     }
     if (trackerMaterialName) {
       settingsStore.recordMaterialTrackerDrop(trackerMaterialName);
@@ -910,11 +951,13 @@
 
   function showAchievementPopup(entry: AchievementUnlockEntry) {
     if (!achievementSettings.overlayEnabled) return;
+    if (!entry?.id || !entry?.name) return;
     const popupId = `${entry.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     achievementPopups = [{ ...entry, popupId }, ...achievementPopups].slice(0, 3);
     if (achievementSettings.soundEnabled && achievementSettings.soundSlot != null) {
       void playSound(achievementSettings.soundSlot, soundVolume * achievementSettings.soundVolume);
     }
+    const duration = Math.max(1500, Math.min(20000, Number(achievementSettings.overlayDuration) || 6000));
     window.setTimeout(() => {
       achievementPopups = achievementPopups.map((popup) =>
         popup.popupId === popupId ? { ...popup, exiting: true } : popup,
@@ -922,7 +965,7 @@
       window.setTimeout(() => {
         achievementPopups = achievementPopups.filter((popup) => popup.popupId !== popupId);
       }, 250);
-    }, achievementSettings.overlayDuration);
+    }, duration);
   }
 
   function startExitAnimation(unit_id: number) {
@@ -1039,7 +1082,7 @@
       if (allowNotification && shouldShowVisualNotification) {
         addItem(displayItem, notificationDuration);
       }
-      if (!identifyInventoryEvent) {
+      if (!identifyInventoryEvent && item.history_pushed !== false) {
         recordTrackerDrop(item, isNewGrailItem);
       } else if (isNewGrailItem) {
         settingsStore.recordGrailOnlyRecentItem(trackedItemDisplayName(item), categorizeDrop(item), {
@@ -1375,6 +1418,25 @@
     </div>
   {/if}
 
+  {#if fateCardTrackerOverlayEnabled && (renderGameTrackerCards || renderTrackerWindow)}
+    <div class="tracker-overlay-position fate-card-tracker-overlay" class:unlocked={trackerEditActive} style={trackerOverlayStyle(fateCardTrackerOverlayPosition, 'fate-cards')}>
+      <div class="tracker-card fate-card-tracker-card" class:unlocked={trackerEditActive} role="complementary" aria-label="Fate Cards Tracker" onpointerdown={(event) => beginTrackerOverlayDrag('fate-cards', event)}>
+        <div class="tracker-header">
+          <span class="tracker-title">Fate Cards</span>
+          {#if trackerEditActive}<span class="drag-hint">Drag</span>{/if}
+        </div>
+        <div class="tracker-rows fate-card-overlay-rows">
+          {#each fateCardRows as row (row.key + '-' + overlayRefreshNonce)}
+            <div class="tracker-row fate-card-overlay-row">
+              <span class="tracker-label fate-card-name fate-card-tier-{row.tier}" title={row.label}>{row.label}</span>
+              <span class="tracker-count">{row.count}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   {#if materialTrackerOverlayEnabled && (renderGameTrackerCards || renderTrackerWindow)}
     <div class="tracker-overlay-position mats-tracker-overlay" class:unlocked={trackerEditActive} style={trackerOverlayStyle(materialTrackerOverlayPosition, 'materials')}>
       <div class="tracker-card mats-tracker-card" class:unlocked={trackerEditActive} role="complementary" aria-label="Mats Tracker" onpointerdown={(event) => beginTrackerOverlayDrag('materials', event)}>
@@ -1591,6 +1653,16 @@
     border-color: var(--overlay-panel-border, rgba(201, 168, 93, 0.58));
   }
 
+  .fate-card-tracker-card {
+    width: var(--tracker-card-width, 238px);
+    min-width: var(--tracker-card-width, 238px);
+    max-width: var(--tracker-card-width, 238px);
+    height: var(--tracker-card-height, 180px);
+    max-height: var(--tracker-card-height, 180px);
+    overflow: auto;
+    border-color: var(--overlay-panel-border, rgba(215, 168, 255, 0.55));
+  }
+
   .tracker-header {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -1622,6 +1694,10 @@
   }
 
   .mats-tracker-card .tracker-title {
+    color: var(--accent-primary, #f6c33d);
+  }
+
+  .fate-card-tracker-card .tracker-title {
     color: var(--accent-primary, #f6c33d);
   }
 
@@ -1740,6 +1816,8 @@
   .category-sets { color: #ffd84a; }
   .category-runes { color: #4da6ff; }
   .category-runewords { color: #f7f2df; }
+  .category-fateCards { color: #d7a8ff; }
+  .category-hatredOrbs { color: #ff6d6d; }
   .category-uniqueJewels { color: #ff5cff; }
   .category-greatRunes,
   .category-enchantedRunes { color: #55ccff; }
@@ -1754,6 +1832,7 @@
   .category-oilOfIntensity { color: #c6f68d; }
   .category-belladonnaExtract { color: #f59bd8; }
   .category-essences { color: #f6c177; }
+  .category-ascendancy { color: #76e4c4; }
   .category-lowRune { color: #cfd6df; }
   .category-midRune { color: #ff5a5a; }
   .category-highRune { color: #4da6ff; }
@@ -1786,6 +1865,16 @@
     gap: 6px;
   }
 
+  .fate-card-overlay-rows {
+    max-height: calc(min(72vh, 720px) - 28px);
+    overflow: hidden;
+    gap: 2px;
+  }
+
+  .fate-card-overlay-row {
+    gap: 6px;
+  }
+
   .tracker-label.rune-name {
     flex: 1;
     min-width: 0;
@@ -1805,9 +1894,25 @@
     white-space: nowrap;
   }
 
+  .tracker-label.fate-card-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: #d7a8ff;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .rune-tier-lowRune { color: #cfd6df; }
   .rune-tier-midRune { color: #ff5a5a; }
   .rune-tier-highRune { color: #00f0ff; }
+  .fate-card-tier-0 { color: #ff8ee8; }
+  .fate-card-tier-1 { color: #d7a8ff; }
+  .fate-card-tier-2 { color: #8bd3ff; }
+  .fate-card-tier-3 { color: #ffd166; }
+  .fate-card-tier-4 { color: #c6f68d; }
+  .fate-card-tier-5 { color: #f7f2df; }
 
   .latest-row {
     margin-top: 3px;

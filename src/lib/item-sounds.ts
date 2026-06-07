@@ -9,8 +9,14 @@ import {
   type HolyGrailItem,
 } from './holy-grail';
 import { uniqueQualityLabel } from './unique-quality-levels';
+import {
+  SOE_13_ESSENCE_ITEMS,
+  SOE_13_FATE_CARD_ITEMS,
+  SOE_13_ITEM_ALIASES,
+  SOE_13_MATERIAL_ITEMS,
+} from './soe-13-items';
 
-export type ItemSoundCategory = 'unique' | 'hellforged' | 'set' | 'runeword' | 'rune' | 'material' | 'custom';
+export type ItemSoundCategory = 'unique' | 'hellforged' | 'set' | 'runeword' | 'rune' | 'fateCard' | 'essence' | 'material' | 'custom';
 
 export interface ItemSoundRule {
   itemName: string;
@@ -103,9 +109,22 @@ export const MATERIAL_NAMES = [
   'Charged Essence of Hatred',
   'Burning Essence of Terror',
   'Festering Essence of Destruction',
+  ...SOE_13_MATERIAL_ITEMS,
 ] as const;
 
-export const MATERIAL_ALIASES: Record<string, string[]> = {
+const BOSS_ESSENCE_NAMES = [
+  'Twisted Essence of Suffering',
+  'Charged Essence of Hatred',
+  'Burning Essence of Terror',
+  'Festering Essence of Destruction',
+] as const;
+
+const ITEM_SOUND_MATERIAL_EXCLUDED_KEYS = new Set(
+  [...SOE_13_FATE_CARD_ITEMS, ...SOE_13_ESSENCE_ITEMS, ...BOSS_ESSENCE_NAMES].map(normalizeHolyGrailKey),
+);
+
+export const MATERIAL_ALIASES: Record<string, readonly string[]> = {
+  ...SOE_13_ITEM_ALIASES,
   [normalizeHolyGrailKey("Cartographer's Chisel of Avarice")]: [
     'Chisel Avarice',
     'Chisel-Avarice',
@@ -138,6 +157,8 @@ export const ITEM_SOUND_CATEGORY_LABELS: Record<ItemSoundCategory, string> = {
   set: 'Sets',
   runeword: 'Runewords',
   rune: 'Runes',
+  fateCard: 'Fate Cards',
+  essence: 'Essences',
   material: 'Materials',
   custom: 'Custom',
 };
@@ -147,6 +168,9 @@ function categoryForGrailItem(item: HolyGrailItem): ItemSoundCategory {
   if (item.category === 'sets') return 'set';
   if (item.category === 'runes') return 'rune';
   if (item.category === 'runewords') return 'runeword';
+  if (item.category === 'fateCards') return 'fateCard';
+  if (item.category === 'essences') return 'essence';
+  if (item.category === 'hatredOrbs' || item.category === 'ascendancy') return 'material';
   return 'unique';
 }
 
@@ -191,14 +215,14 @@ export function buildItemSoundCatalog(): ItemSoundCatalogItem[] {
     const cleanName = cleanTrackedItemName(itemName);
     if (!cleanName || seen.has(key)) return;
     const isUnique = category === 'unique' || category === 'hellforged';
-    const label = isUnique ? `${cleanName} (${uniqueQualityLabel(cleanName)})` : cleanName;
+    const label = cleanName;
     seen.add(key);
     out.push({
       key,
       itemName: cleanName,
       category,
       label,
-      searchText: `${cleanName} ${label} ${ITEM_SOUND_CATEGORY_LABELS[category]} quality level ${isUnique ? uniqueQualityLabel(cleanName) : ''}`.toLowerCase(),
+      searchText: `${cleanName} ${ITEM_SOUND_CATEGORY_LABELS[category]} ${isUnique ? `quality level ${uniqueQualityLabel(cleanName)}` : ''}`.toLowerCase(),
     });
   };
 
@@ -208,7 +232,11 @@ export function buildItemSoundCatalog(): ItemSoundCatalogItem[] {
   for (const rune of RUNE_NAMES) {
     add('rune', rune, itemSoundKey('rune', rune));
   }
+  for (const essence of BOSS_ESSENCE_NAMES) {
+    add('essence', essence, itemSoundKey('essence', essence));
+  }
   for (const material of MATERIAL_NAMES) {
+    if (ITEM_SOUND_MATERIAL_EXCLUDED_KEYS.has(normalizeHolyGrailKey(material))) continue;
     add('material', material, itemSoundKey('material', material));
   }
 
@@ -272,7 +300,7 @@ function grailRuleKeysForDrop(item: DropTrackerItemLike): string[] {
   if (quality === 'set') categories.push('sets');
   if (drop.is_runeword === true || drop.isRuneword === true) categories.push('runewords');
   if (quality === 'unique' || isHellforged) categories.push('su');
-  categories.push('ssu', 'sets', 'runewords', 'su');
+  categories.push('fateCards', 'hatredOrbs', 'essences', 'ascendancy', 'ssu', 'sets', 'runewords', 'su');
 
   for (const category of Array.from(new Set(categories))) {
     for (const name of names) {
@@ -305,8 +333,8 @@ export function findItemSoundRuleForDrop(
   const haystack = normalizedWordText(dropNames.join(' '));
   for (const [key, rule] of Object.entries(normalizedRules)) {
     if (rule.soundSlot == null) continue;
-    if (rule.category !== 'material' && rule.category !== 'custom') continue;
-    const candidates = rule.category === 'material' ? materialRuleNames(rule.itemName) : [rule.itemName];
+    if (rule.category !== 'material' && rule.category !== 'fateCard' && rule.category !== 'essence' && rule.category !== 'custom') continue;
+    const candidates = rule.category === 'custom' ? [rule.itemName] : materialRuleNames(rule.itemName);
     if (candidates.some((candidate) => dropNames.some((name) => normalizeHolyGrailKey(name) === normalizeHolyGrailKey(candidate)))) return rule;
     if (candidates.some((candidate) => containsItemName(haystack, candidate))) return rule;
     if (key === itemSoundKey(rule.category, rule.itemName)) continue;

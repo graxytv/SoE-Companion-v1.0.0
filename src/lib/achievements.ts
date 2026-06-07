@@ -16,6 +16,7 @@ export type AchievementCategory =
   | 'Levels'
   | 'Grail'
   | 'Runes'
+  | 'Fate Cards'
   | 'Materials';
 
 export interface AchievementUnlockEntry {
@@ -39,6 +40,8 @@ export interface AchievementStats {
   totalKills: number;
   bossKills: Record<string, number>;
   materialFinds: Record<string, number>;
+  fateCardsFound: number;
+  tier0FateCardsFound: number;
   characterLevels: Record<string, AchievementCharacterLevel>;
   corruptions: number;
   bricks: number;
@@ -133,6 +136,8 @@ export function defaultAchievementStats(): AchievementStats {
     totalKills: 0,
     bossKills: {},
     materialFinds: {},
+    fateCardsFound: 0,
+    tier0FateCardsFound: 0,
     characterLevels: {},
     corruptions: 0,
     bricks: 0,
@@ -195,6 +200,7 @@ export const MATERIAL_ACHIEVEMENT_ITEMS = [
 
 function normalizeMaterialText(value: string | null | undefined): string {
   return String(value ?? '')
+    .replace(/[\u2018\u2019]/g, "'")
     .replace(/\s+\[[^\]]{1,32}\]\s*$/g, '')
     .replace(/\s+\([^)]{1,32}\)\s*$/g, '')
     .replace(/[^a-z0-9]+/gi, ' ')
@@ -243,6 +249,14 @@ function highRuneTotal(ctx: AchievementContext): number {
 
 function runeTotal(ctx: AchievementContext): number {
   return RUNE_NAMES.reduce((sum, rune) => sum + (ctx.runeTrackerCounts[rune] ?? 0), 0);
+}
+
+function fateCardTotal(ctx: AchievementContext): number {
+  return ctx.stats.fateCardsFound ?? 0;
+}
+
+function tier0FateCardTotal(ctx: AchievementContext): number {
+  return ctx.stats.tier0FateCardsFound ?? 0;
 }
 
 function characterLevels(ctx: AchievementContext): AchievementCharacterLevel[] {
@@ -362,6 +376,10 @@ const grailAchievements: AchievementDefinition[] = [
   { id: 'set-grail-complete', name: 'Complete the Set Items Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'sets') },
   { id: 'rune-grail-complete', name: 'Complete the Rune Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: runeGrailComplete },
   { id: 'runeword-grail-complete', name: 'Complete the Runeword Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'runewords') },
+  { id: 'fate-card-grail-complete', name: 'Complete the Fate Card Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'fateCards') },
+  { id: 'hatred-orb-grail-complete', name: 'Complete the Hatred Orb Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'hatredOrbs') },
+  { id: 'essence-grail-complete', name: 'Complete the Essence Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'essences') },
+  { id: 'ascendancy-grail-complete', name: 'Complete the Ascendancy Grail Category', category: 'Grail', tier: 'Legendary', target: 1, progress: (ctx) => grailCategoryComplete(ctx, 'ascendancy') },
 ];
 
 const runeAchievements: AchievementDefinition[] = [
@@ -371,6 +389,25 @@ const runeAchievements: AchievementDefinition[] = [
   { id: 'first-high-rune', name: 'Find Your First High Rune', category: 'Runes', tier: 'Gold', target: 1, progress: highRuneTotal },
   { id: 'first-zod', name: 'Find Your First Zod', category: 'Runes', tier: 'Legendary', target: 1, progress: (ctx) => ctx.runeTrackerCounts.Zod ?? 0 },
   { id: 'two-high-runes-one-run', name: 'Find 2 High Runes In One Run', category: 'Runes', tier: 'Legendary', target: 2, progress: (ctx) => highRuneTotal(ctx), description: 'Currently uses tracked high-rune progress until per-run high-rune history is expanded.' },
+];
+
+const fateCardAchievements: AchievementDefinition[] = [
+  ...[1, 100, 1000, 10000].map((target) => ({
+    id: `fate-cards-${target}`,
+    name: `Find ${target.toLocaleString()} Fate Card${target === 1 ? '' : 's'}`,
+    category: 'Fate Cards' as const,
+    tier: (target >= 10000 ? 'Legendary' : target >= 1000 ? 'Gold' : target >= 100 ? 'Silver' : 'Bronze') as AchievementTier,
+    target,
+    progress: fateCardTotal,
+  })),
+  ...[1, 25, 50, 75, 100, 250, 500, 1000].map((target) => ({
+    id: `tier-0-fate-cards-${target}`,
+    name: `Find ${target.toLocaleString()} Tier 0 Fate Card${target === 1 ? '' : 's'}`,
+    category: 'Fate Cards' as const,
+    tier: (target >= 1000 ? 'Legendary' : target >= 250 ? 'Gold' : target >= 75 ? 'Silver' : 'Bronze') as AchievementTier,
+    target,
+    progress: tier0FateCardTotal,
+  })),
 ];
 
 const materialAchievements: AchievementDefinition[] = MATERIAL_ACHIEVEMENT_ITEMS.map((item) => ({
@@ -389,6 +426,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   ...levelAchievements,
   ...grailAchievements,
   ...runeAchievements,
+  ...fateCardAchievements,
   ...materialAchievements,
 ];
 
@@ -399,6 +437,7 @@ export const ACHIEVEMENT_CATEGORIES: AchievementCategory[] = [
   'Levels',
   'Grail',
   'Runes',
+  'Fate Cards',
   'Materials',
 ];
 
@@ -422,6 +461,8 @@ export function normalizeAchievementStats(value: unknown): AchievementStats {
     materialFinds: Object.fromEntries(
       Object.entries(input.materialFinds ?? {}).map(([key, count]) => [key, Math.max(0, Math.floor(Number(count) || 0))]),
     ),
+    fateCardsFound: Math.max(0, Math.floor(Number(input.fateCardsFound) || 0)),
+    tier0FateCardsFound: Math.max(0, Math.floor(Number(input.tier0FateCardsFound) || 0)),
     characterLevels: Object.fromEntries(
       Object.entries(input.characterLevels ?? {}).map(([key, char]) => {
         const c = char as Partial<AchievementCharacterLevel>;

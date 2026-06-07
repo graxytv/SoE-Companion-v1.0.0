@@ -42,6 +42,73 @@ const GOBLIN_CLASS_IDS: &[u32] = &[
 #[cfg(target_os = "windows")]
 const ITEM_MODE_ON_GROUND: u32 = 3;
 
+#[cfg(target_os = "windows")]
+const FATE_CARD_NAMES: &[&str] = &[
+    "The Apothecary",
+    "The Eye of Terror",
+    "The Doctor",
+    "The Sephiroth",
+    "The Immortal",
+    "Wealth and Power",
+    "House of Mirrors",
+    "Unrequited Love",
+    "Seraphic Favor",
+    "Alluring Bounty",
+    "A Fate Worse Than Death",
+    "A Stone Perfected",
+    "Lonely Warrior",
+    "The Polymath",
+    "Iridescent Dream",
+    "The Web",
+    "I see Brothers",
+    "The Reaper",
+    "The Shieldbearer",
+    "The Avenger",
+    "Gemcutter's Promise",
+    "Chaotic Disposition",
+    "The Unexpected Prize",
+    "Further Invention",
+    "Gemcutter's Mercy",
+    "Lost Worlds",
+    "Boundless Realms",
+    "The Journey",
+    "Cartographer's Delight",
+    "The Cartographer",
+    "More is Never Enough",
+    "Ambush",
+    "The Artist",
+    "Misery in Darkness",
+    "Bowyer's Dream",
+    "Dormant Allure",
+    "The Assegai",
+    "The Rite of Elements",
+    "Call of the First Ones",
+    "Therianthropy",
+    "Cursed Words",
+    "The Dark Mage",
+    "The Lich",
+    "The Celestial Justicar",
+    "The Crusader",
+    "The Bulwark",
+    "A Chilling Wind",
+    "The Blazing Fire",
+    "The Coming Storm",
+    "The Warlord",
+    "The Battle Born",
+    "The Skirmisher",
+    "The Undaunted",
+    "Gemcutter's Gift",
+    "The Archmage's Right Hand",
+    "The Survivalist",
+    "Abandoned Wealth",
+    "The Scout",
+    "Glimmer of Hope",
+    "The Escape",
+    "Humility",
+    "The Saint's Treasure",
+    "The Inventor",
+];
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GoblinDetectedEvent {
     pub unit_id: u32,
@@ -416,11 +483,7 @@ impl DropScanner {
         false
     }
 
-    fn apply_filter_decision(
-        &mut self,
-        event: &mut ItemDropEvent,
-        apply_visibility: bool,
-    ) -> bool {
+    fn apply_filter_decision(&mut self, event: &mut ItemDropEvent, apply_visibility: bool) -> bool {
         if !self.state.filter_enabled.load(Ordering::Relaxed) {
             return false;
         }
@@ -439,10 +502,7 @@ impl DropScanner {
         if self.verbose_filter_logging {
             let winner = filter.rules.iter().rev().find(|r| ctx.matches(r));
             let reason = match winner {
-                Some(r) => format!(
-                    "winner={}",
-                    r.name_pattern.as_deref().unwrap_or("<any>")
-                ),
+                Some(r) => format!("winner={}", r.name_pattern.as_deref().unwrap_or("<any>")),
                 None => format!("no rule matched (hide_all={})", filter.hide_all),
             };
             let vis_label = match decision.visibility {
@@ -475,7 +535,10 @@ impl DropScanner {
                         .loot_hook
                         .add_shown_unit_id(&self.state.ctx, event.unit_id)
                     {
-                        log_error(&format!("Failed to force-show item {}: {}", event.unit_id, e));
+                        log_error(&format!(
+                            "Failed to force-show item {}: {}",
+                            event.unit_id, e
+                        ));
                     }
                 }
                 Visibility::Hide => {
@@ -528,12 +591,7 @@ impl DropScanner {
             .or_insert(0) += 1;
     }
 
-    fn consume_inventory_identify_candidate(
-        &mut self,
-        key: u32,
-        class: u32,
-        quality: u32,
-    ) -> bool {
+    fn consume_inventory_identify_candidate(&mut self, key: u32, class: u32, quality: u32) -> bool {
         if self.inventory_identify_candidates.remove(&key) {
             return true;
         }
@@ -563,10 +621,12 @@ impl DropScanner {
     }
 
     fn is_tracker_relevant_event(event: &ItemDropEvent) -> bool {
-        if event.quality.eq_ignore_ascii_case("unique") || event.quality.eq_ignore_ascii_case("set") {
+        if event.quality.eq_ignore_ascii_case("unique") || event.quality.eq_ignore_ascii_case("set")
+        {
             return true;
         }
-        Self::is_rune_event(event)
+        Self::is_fate_card_event(event)
+            || Self::is_rune_event(event)
             || Self::contains_tracker_keyword(event, "charm")
             || Self::contains_tracker_keyword(event, "jewel")
             || Self::contains_tracker_keyword(event, "perfect")
@@ -621,6 +681,23 @@ impl DropScanner {
         MATERIAL_KEYWORDS
             .iter()
             .any(|keyword| Self::contains_tracker_keyword(event, keyword))
+    }
+
+    fn is_fate_card_event(event: &ItemDropEvent) -> bool {
+        if fate_card_name_from_code(&event.item_code).is_some()
+            || Self::contains_tracker_keyword(event, "fate card")
+        {
+            return true;
+        }
+
+        let haystack = format!(
+            "{}\n{}\n{}",
+            event.name, event.base_name, event.canonical_name
+        )
+        .to_ascii_lowercase();
+        FATE_CARD_NAMES
+            .iter()
+            .any(|name| haystack.contains(&name.to_ascii_lowercase()))
     }
 
     fn contains_tracker_keyword(event: &ItemDropEvent, needle: &str) -> bool {
@@ -791,7 +868,9 @@ impl DropScanner {
                     // already-owned items, not fresh drops, so never let them
                     // enter loot history, tracker counts, grail tracking, or
                     // identify-time candidate state.
-                    if unit.mode != ITEM_MODE_ON_GROUND || inventory_item_ids.contains(&unit.unit_id) {
+                    if unit.mode != ITEM_MODE_ON_GROUND
+                        || inventory_item_ids.contains(&unit.unit_id)
+                    {
                         p_unit = unit.p_next_unit;
                         continue;
                     }
@@ -815,7 +894,8 @@ impl DropScanner {
                     let filter_should_emit = self.apply_filter_decision(&mut event, true);
                     let unidentified_unique_or_set = Self::is_unidentified_unique_or_set(&event);
                     let tracker_relevant = Self::is_tracker_relevant_event(&event);
-                    let should_emit = filter_should_emit || unidentified_unique_or_set || tracker_relevant;
+                    let should_emit =
+                        filter_should_emit || unidentified_unique_or_set || tracker_relevant;
                     // Cache enriched event for the map-marker pass.
                     self.state
                         .recent_events
@@ -966,7 +1046,8 @@ impl DropScanner {
                 continue;
             };
             if !item_data.is_identified()
-                || (item_data.quality != item_quality::UNIQUE && item_data.quality != item_quality::SET)
+                || (item_data.quality != item_quality::UNIQUE
+                    && item_data.quality != item_quality::SET)
             {
                 continue;
             }
@@ -1126,6 +1207,7 @@ impl DropScanner {
         };
         let item_code = self.class_code(class);
         let base_name = self.class_base_name(class);
+        let fate_card_name = fate_card_name_from_code(&item_code).map(str::to_string);
         let live_name = scanned
             .name
             .as_deref()
@@ -1140,7 +1222,9 @@ impl DropScanner {
         } else {
             Some(base_name.clone())
         };
-        let (name, name_source) = if let Some(name) = live_name {
+        let (name, name_source) = if let Some(name) = fate_card_name.clone() {
+            (name, "fate-card-code")
+        } else if let Some(name) = live_name {
             (name, "live-tooltip")
         } else if let Some(name) = table_name.clone() {
             (name, "data-table")
@@ -1163,9 +1247,9 @@ impl DropScanner {
         // not reliable enough for them. Non-unique/set drops can still use the
         // base game name so material/rune tracking is not broken by filters
         // that rename labels such as Worldstone Shard -> WSS!!.
-        let canonical_name = if scanned.quality == item_quality::UNIQUE
-            || scanned.quality == item_quality::SET
-        {
+        let canonical_name = if let Some(name) = fate_card_name.clone() {
+            name
+        } else if scanned.quality == item_quality::UNIQUE || scanned.quality == item_quality::SET {
             String::new()
         } else {
             base_name.clone()
@@ -1198,7 +1282,10 @@ impl DropScanner {
             quality,
             base_name,
             canonical_name,
-            category: self.class_category(class),
+            category: fate_card_name
+                .as_ref()
+                .map(|_| "Fate Cards".to_string())
+                .or_else(|| self.class_category(class)),
             name,
             stats,
             is_ethereal: scanned.is_ethereal,
@@ -1767,6 +1854,14 @@ fn item_code_from_u32(value: u32) -> String {
         .filter(|byte| *byte != 0 && *byte != b' ')
         .map(char::from)
         .collect::<String>()
+}
+
+#[cfg(target_os = "windows")]
+fn fate_card_name_from_code(code: &str) -> Option<&'static str> {
+    let code = code.trim().to_ascii_lowercase();
+    let suffix = code.strip_prefix("fa")?;
+    let index = suffix.parse::<usize>().ok()?.checked_sub(1)?;
+    FATE_CARD_NAMES.get(index).copied()
 }
 
 #[cfg(target_os = "windows")]

@@ -45,7 +45,10 @@ fn class_name(class_id: u8) -> &'static str {
 }
 
 fn clean_character_name(bytes: &[u8]) -> Option<String> {
-    let end = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+    let end = bytes
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(bytes.len());
     let name = String::from_utf8_lossy(&bytes[..end]).trim().to_string();
     let valid = !name.is_empty()
         && name
@@ -55,18 +58,28 @@ fn clean_character_name(bytes: &[u8]) -> Option<String> {
 }
 
 fn parse_character_file(path: &Path) -> Result<ParsedCharacter, String> {
-    let bytes = fs::read(path).map_err(|error| format!("Failed to read {}: {error}", path.display()))?;
+    let bytes =
+        fs::read(path).map_err(|error| format!("Failed to read {}: {error}", path.display()))?;
     if bytes.len() <= LEVEL_OFFSET || bytes.get(0..4) != Some(&D2S_MAGIC) {
-        return Err(format!("Not a Diablo II character save: {}", path.display()));
+        return Err(format!(
+            "Not a Diablo II character save: {}",
+            path.display()
+        ));
     }
 
     let name = clean_character_name(&bytes[NAME_OFFSET..NAME_OFFSET + NAME_LEN])
-        .or_else(|| path.file_stem().map(|stem| stem.to_string_lossy().trim().to_string()))
+        .or_else(|| {
+            path.file_stem()
+                .map(|stem| stem.to_string_lossy().trim().to_string())
+        })
         .filter(|name| !name.is_empty())
         .ok_or_else(|| format!("Character save has no name: {}", path.display()))?;
     let level = bytes[LEVEL_OFFSET];
     if !(1..=99).contains(&level) {
-        return Err(format!("Character save has an invalid level: {}", path.display()));
+        return Err(format!(
+            "Character save has an invalid level: {}",
+            path.display()
+        ));
     }
 
     let modified_ms = fs::metadata(path)
@@ -100,7 +113,10 @@ fn push_unique_dir(paths: &mut Vec<PathBuf>, path: PathBuf) {
 fn candidate_save_dirs(stash_path: Option<String>) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    if let Some(path) = stash_path.map(|path| path.trim().to_string()).filter(|path| !path.is_empty()) {
+    if let Some(path) = stash_path
+        .map(|path| path.trim().to_string())
+        .filter(|path| !path.is_empty())
+    {
         let selected = PathBuf::from(path);
         if selected.is_dir() {
             push_unique_dir(&mut paths, selected);
@@ -112,22 +128,34 @@ fn candidate_save_dirs(stash_path: Option<String>) -> Vec<PathBuf> {
     if let Ok(profile) = std::env::var("USERPROFILE") {
         push_unique_dir(
             &mut paths,
-            PathBuf::from(&profile).join("Saved Games").join("Diablo II"),
+            PathBuf::from(&profile)
+                .join("Saved Games")
+                .join("Diablo II"),
         );
         push_unique_dir(
             &mut paths,
-            PathBuf::from(&profile).join("Saved Games").join("ProjectD2"),
+            PathBuf::from(&profile)
+                .join("Saved Games")
+                .join("ProjectD2"),
         );
     }
 
-    push_unique_dir(&mut paths, PathBuf::from(r"C:\Program Files (x86)\Diablo II\Save"));
-    push_unique_dir(&mut paths, PathBuf::from(r"C:\Program Files\Diablo II\Save"));
+    push_unique_dir(
+        &mut paths,
+        PathBuf::from(r"C:\Program Files (x86)\Diablo II\Save"),
+    );
+    push_unique_dir(
+        &mut paths,
+        PathBuf::from(r"C:\Program Files\Diablo II\Save"),
+    );
 
     paths
 }
 
 #[tauri::command]
-pub fn sync_character_levels(stash_path: Option<String>) -> Result<CharacterLevelSyncResult, String> {
+pub fn sync_character_levels(
+    stash_path: Option<String>,
+) -> Result<CharacterLevelSyncResult, String> {
     let save_dirs = candidate_save_dirs(stash_path);
     if save_dirs.is_empty() {
         return Ok(CharacterLevelSyncResult {
@@ -162,7 +190,8 @@ pub fn sync_character_levels(stash_path: Option<String>) -> Result<CharacterLeve
                 .get(&key)
                 .map(|existing| {
                     parsed.entry.level > existing.entry.level
-                        || (parsed.entry.level == existing.entry.level && parsed.modified_ms > existing.modified_ms)
+                        || (parsed.entry.level == existing.entry.level
+                            && parsed.modified_ms > existing.modified_ms)
                 })
                 .unwrap_or(true);
             if replace {
@@ -171,7 +200,8 @@ pub fn sync_character_levels(stash_path: Option<String>) -> Result<CharacterLeve
         }
     }
 
-    let mut characters: Vec<CharacterLevelEntry> = by_name.into_values().map(|parsed| parsed.entry).collect();
+    let mut characters: Vec<CharacterLevelEntry> =
+        by_name.into_values().map(|parsed| parsed.entry).collect();
     characters.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
     let message = match characters.len() {

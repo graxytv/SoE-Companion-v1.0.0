@@ -5,6 +5,7 @@ export const OVERLAY_LAYOUT_WINDOWS = [
   { kind: 'grail', label: 'Grail Progress', windowLabel: 'grail-card-overlay' },
   { kind: 'materials', label: 'Mats Tracker', windowLabel: 'mats-card-overlay' },
   { kind: 'runes', label: 'Rune Tracker', windowLabel: 'runes-card-overlay' },
+  { kind: 'fate-cards', label: 'Fate Cards', windowLabel: 'fate-cards-card-overlay' },
   { kind: 'achievements', label: 'Achievement Progress', windowLabel: 'achievement-card-overlay' },
   { kind: 'achievement-popup', label: 'Achievement Popup', windowLabel: 'achievement-popup-overlay' },
   { kind: 'kills', label: 'Monster Kills', windowLabel: 'kills-card-overlay' },

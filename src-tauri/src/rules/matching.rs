@@ -7,6 +7,7 @@ use crate::notifier::{ItemDropEvent, UniqueKind};
 
 pub struct MatchContext<'a> {
     pub item: &'a ItemDropEvent,
+    item_code_lower: String,
     name_lower: String,
     base_name_lower: String,
     category_lower: String,
@@ -17,6 +18,7 @@ impl<'a> MatchContext<'a> {
     pub fn new(item: &'a ItemDropEvent) -> Self {
         Self {
             item,
+            item_code_lower: item.item_code.to_lowercase(),
             name_lower: item.name.to_lowercase(),
             base_name_lower: item.base_name.to_lowercase(),
             category_lower: item
@@ -51,7 +53,9 @@ impl<'a> MatchContext<'a> {
                 !self.base_name_lower.is_empty() && pattern_matches(pattern, &self.base_name_lower);
             let category_hit =
                 !self.category_lower.is_empty() && pattern_matches(pattern, &self.category_lower);
-            if !(name_hit || base_hit || category_hit) {
+            let code_hit =
+                !self.item_code_lower.is_empty() && pattern_matches(pattern, &self.item_code_lower);
+            if !(name_hit || base_hit || category_hit || code_hit) {
                 return false;
             }
         }
@@ -129,6 +133,7 @@ mod tests {
         ItemDropEvent {
             unit_id: 1,
             class: 25,
+            item_code: String::new(),
             quality: quality.to_string(),
             name: name.to_string(),
             base_name: String::new(),
@@ -157,6 +162,7 @@ mod tests {
         ItemDropEvent {
             unit_id: 1,
             class: 25,
+            item_code: String::new(),
             quality: quality.to_string(),
             name: name.to_string(),
             base_name: base.to_string(),
@@ -181,6 +187,13 @@ mod tests {
         }
     }
 
+    fn item_with_code(name: &str, code: &str) -> ItemDropEvent {
+        ItemDropEvent {
+            item_code: code.to_string(),
+            ..item(name, "Normal", "", false)
+        }
+    }
+
     #[test]
     fn name_pattern_regex_and_substring_fallback() {
         let it = item("Stone of Jordan", "Unique", "", false);
@@ -197,6 +210,18 @@ mod tests {
             ..Rule::default()
         };
         assert!(!ctx.matches(&bad));
+    }
+
+    #[test]
+    fn name_pattern_matches_item_code() {
+        let it = item_with_code("Fate Card", "fa01");
+        let ctx = MatchContext::new(&it);
+
+        let rule = Rule {
+            name_pattern: Some("fa01".into()),
+            ..Rule::default()
+        };
+        assert!(ctx.matches(&rule));
     }
 
     #[test]

@@ -3,17 +3,10 @@
   import { emit, listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
   import { Button, HotkeyInput, ThemeToggle, Toggle, UpdateButton } from '../components';
-  import { settingsStore, itemsDictionaryStore, type HotkeyConfig } from '../stores';
-  import { buildHolyGrailItems } from '../lib/holy-grail';
+  import { settingsStore, type HotkeyConfig } from '../stores';
 
   interface Props {
     gameStatus?: 'unknown' | 'ingame' | 'menu';
-  }
-
-  interface AccountStatsSyncResult {
-    totalKills: number;
-    bossKills: Record<string, number>;
-    matchedText: string;
   }
 
   interface AccountStatsResetResult {
@@ -27,7 +20,6 @@
 
   let saveExitAutomationStatus = $state('');
   let newGameAutomationOpen = $state(false);
-  let syncingAccountStats = $state(false);
   let resettingAccountStats = $state(false);
   let confirmAccountStatsReset = $state(false);
   let accountStatsMessage = $state('');
@@ -133,40 +125,6 @@
       saveExitAutomationStatus = `Saved to ${path}`;
     } catch (err) {
       saveExitAutomationStatus = `Failed to save: ${err}`;
-    }
-  }
-
-  function evaluateAchievementUnlocks(): void {
-    settingsStore.evaluateAchievementUnlocks({
-      holyGrailFound: settingsStore.settings.holyGrailFound,
-      holyGrailItems: buildHolyGrailItems(itemsDictionaryStore.dict),
-      runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
-    });
-  }
-
-  async function syncAccountStats(): Promise<void> {
-    syncingAccountStats = true;
-    accountStatsMessage = 'Reading shared stash account stats...';
-    try {
-      const stats = settingsStore.settings.achievementStats;
-      const result = await invoke<AccountStatsSyncResult>('sync_accountstats_kills', {
-        currentKills: stats.totalKills,
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
-      });
-      settingsStore.updateAchievementStats({
-        totalKills: result.totalKills,
-        bossKills: {
-          ...stats.bossKills,
-          ...result.bossKills,
-        },
-      });
-      evaluateAchievementUnlocks();
-      const bossCount = Object.keys(result.bossKills ?? {}).length;
-      accountStatsMessage = `Synced ${result.totalKills.toLocaleString()} Monster Kills and ${bossCount} boss stat${bossCount === 1 ? '' : 's'}.`;
-    } catch (error) {
-      accountStatsMessage = String(error);
-    } finally {
-      syncingAccountStats = false;
     }
   }
 
@@ -378,14 +336,11 @@
 
   <div class="settings-section accountstats-panel">
     <div>
-      <h2 class="section-title">Account Stats</h2>
-      <p class="section-description">Sync SoE account stats for achievements or reset the local account stats file.</p>
+      <h2 class="section-title">Reset Account Stats</h2>
+      <p class="section-description">Reset the account-stat stash data and SoE Companion account settings used by achievement tracking.</p>
     </div>
 
     <div class="accountstats-actions">
-      <Button variant="primary" size="sm" disabled={syncingAccountStats} onclick={syncAccountStats}>
-        {syncingAccountStats ? 'Syncing...' : 'Sync Account Stats'}
-      </Button>
       <div class="reset-accountstats-block">
         <Button
           variant="danger"
@@ -403,6 +358,7 @@
       <p class="accountstats-message">{accountStatsMessage}</p>
     {/if}
   </div>
+
 </section>
 
 <style>

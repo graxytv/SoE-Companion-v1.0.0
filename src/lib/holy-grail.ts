@@ -6,6 +6,16 @@ import {
 } from "./holy-grail-static";
 import { RUNE_NAMES, SOE_RUNEWORDS, type RuneName } from "./runewords";
 import { uniqueQualityLevel } from "./unique-quality-levels";
+import {
+  SOE_13_ASCENDANCY_ITEMS,
+  SOE_13_ESSENCE_ITEMS,
+  SOE_13_FATE_CARD_ITEMS,
+  SOE_13_HATRED_ORB_ITEMS,
+  SOE_13_UNIQUE_ITEMS,
+  fateCardInfo,
+  soe13ItemAliases,
+  soe13ListContains,
+} from "./soe-13-items";
 
 
 // Kept for gsf-item-catalog.ts compatibility (GSF tracker removed but import remains)
@@ -17,6 +27,10 @@ export const HOLY_GRAIL_CATEGORIES = [
   { key: "sets", label: "Set Items" },
   { key: "runes", label: "Runes" },
   { key: "runewords", label: "Runewords" },
+  { key: "fateCards", label: "Fate Cards" },
+  { key: "hatredOrbs", label: "Hatred Orbs" },
+  { key: "essences", label: "Essences" },
+  { key: "ascendancy", label: "Ascendancy" },
 ] as const;
 
 export type HolyGrailCategoryKey =
@@ -31,6 +45,9 @@ export interface HolyGrailItem {
   bases?: string[];
   requiredLevel?: number | null;
   qualityLevel?: number | null;
+  fateCardAmountRequired?: number | null;
+  fateCardReward?: string | null;
+  fateCardDropLocation?: string | null;
 }
 
 export interface HolyGrailFoundEntry {
@@ -83,7 +100,7 @@ export function normalizeHolyGrailKey(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[']/g, "'")
+    .replace(/[\u2018\u2019]/g, "'")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, "-");
@@ -143,19 +160,27 @@ export function buildHolyGrailItems(
     names: readonly string[] | string[] | undefined,
   ) => {
     for (const name of uniqueNames(names)) {
+      const fateCard = category === "fateCards" ? fateCardInfo(name) : null;
       out.push({
         key: itemKey(category, name),
         name,
         category,
-        qualityLevel: category === "su" || category === "ssu" ? uniqueQualityLevel(name) : null,
+        qualityLevel: fateCard?.tier ?? (category === "su" || category === "ssu" ? uniqueQualityLevel(name) : null),
+        fateCardAmountRequired: fateCard?.amountRequired ?? null,
+        fateCardReward: fateCard?.reward ?? null,
+        fateCardDropLocation: fateCard?.dropLocation ?? null,
       });
     }
   };
 
-  addMany("su", STATIC_UNIQUE_ITEMS);
+  addMany("su", [...STATIC_UNIQUE_ITEMS, ...SOE_13_UNIQUE_ITEMS]);
   addMany("ssu", STATIC_HELLFORGED_UNIQUE_ITEMS);
   addMany("sets", STATIC_SET_ITEMS);
   addMany("runes", RUNE_NAMES);
+  addMany("fateCards", SOE_13_FATE_CARD_ITEMS);
+  addMany("hatredOrbs", SOE_13_HATRED_ORB_ITEMS);
+  addMany("essences", SOE_13_ESSENCE_ITEMS);
+  addMany("ascendancy", SOE_13_ASCENDANCY_ITEMS);
   for (const runeword of SOE_RUNEWORDS) {
     out.push({
       key: runeword.key,
@@ -176,6 +201,7 @@ let canonicalItemsByCategory: Map<HolyGrailCategoryKey, HolyGrailItem[]> | null 
 const HOLY_GRAIL_ITEM_ALIASES: Record<string, readonly string[]> = {
   "Horadrim Almanac": ["Horadric Almanac"],
   "Horadrim Navigator": ["Horadric Navigator"],
+  "Worldstone Shard": ["World Stone Shard", "World Stone Shards"],
 };
 
 const CODE_ONLY_GRAIL_UNIQUES: Record<string, string> = {
@@ -193,6 +219,14 @@ function codeOnlyGrailUnique(item: HolyGrailItemLike): HolyGrailItem | null {
   return name ? canonicalHolyGrailItem("su", name) : null;
 }
 
+function codeOnlyFateCard(item: HolyGrailItemLike): HolyGrailItem | null {
+  const match = /^fa(\d{1,2})$/i.exec(normalizedItemCode(item));
+  if (!match) return null;
+  const index = Number.parseInt(match[1], 10) - 1;
+  const name = SOE_13_FATE_CARD_ITEMS[index];
+  return name ? canonicalHolyGrailItem("fateCards", name) : null;
+}
+
 function canonicalLookup(): Map<string, HolyGrailItem> {
   if (!canonicalItemsByCategoryAndName) {
     canonicalItemsByCategoryAndName = new Map(
@@ -203,6 +237,9 @@ function canonicalLookup(): Map<string, HolyGrailItem> {
           [`${item.category}:${normalizeHolyGrailKey(stripSavedTierSuffix(item.name))}`, item],
         ];
         for (const alias of HOLY_GRAIL_ITEM_ALIASES[item.name] ?? []) {
+          entries.push([`${item.category}:${normalizeHolyGrailKey(alias)}`, item]);
+        }
+        for (const alias of soe13ItemAliases(item.name)) {
           entries.push([`${item.category}:${normalizeHolyGrailKey(alias)}`, item]);
         }
         if (item.category === "ssu") {
@@ -242,7 +279,15 @@ function canonicalItemInsideDecoratedName(
   category: HolyGrailCategoryKey,
   name: string,
 ): HolyGrailItem | null {
-  if (category !== "su" && category !== "ssu" && category !== "sets") return null;
+  if (
+    category !== "su" &&
+    category !== "ssu" &&
+    category !== "sets" &&
+    category !== "fateCards" &&
+    category !== "hatredOrbs" &&
+    category !== "essences" &&
+    category !== "ascendancy"
+  ) return null;
 
   const haystack = ` ${normalizedWordText(name)} `;
   if (!haystack.trim()) return null;
@@ -330,6 +375,7 @@ export function inferHolyGrailCategory(
   item: HolyGrailItemLike,
 ): HolyGrailCategoryKey | null {
   if (codeOnlyGrailUnique(item)) return "su";
+  if (codeOnlyFateCard(item)) return "fateCards";
   if (item.is_runeword === true || item.isRuneword === true) return "runewords";
   const quality = (item.quality ?? "").toLowerCase();
   if (quality === "runeword") return "runewords";
@@ -347,6 +393,10 @@ export function inferHolyGrailCategory(
     RUNE_NAMES.some((rune) => rune.toLowerCase() === name.toLowerCase()) ||
     RUNE_NAMES.some((rune) => new RegExp(`\\b${rune}\\s+rune\\b`, "i").test(name))
   ) return "runes";
+  if (soe13ListContains(SOE_13_FATE_CARD_ITEMS, name)) return "fateCards";
+  if (soe13ListContains(SOE_13_HATRED_ORB_ITEMS, name)) return "hatredOrbs";
+  if (soe13ListContains(SOE_13_ESSENCE_ITEMS, name)) return "essences";
+  if (soe13ListContains(SOE_13_ASCENDANCY_ITEMS, name)) return "ascendancy";
   if (item.is_hellforged === true || item.isHellforged === true || /\bhellforged\b/i.test(name) || canonicalHolyGrailItem("ssu", name)) return "ssu";
 
   if (quality === "unique") return "su";
@@ -358,6 +408,8 @@ export function holyGrailItemFromDrop(
 ): HolyGrailItem | null {
   const byCode = codeOnlyGrailUnique(item);
   if (byCode) return byCode;
+  const fateCardByCode = codeOnlyFateCard(item);
+  if (fateCardByCode) return fateCardByCode;
 
   const category = inferHolyGrailCategory(item);
   const name = cleanTrackedItemName(
@@ -401,11 +453,16 @@ export function holyGrailCategoryProgress(
 
 export function mostRecentHolyGrailFind(
   found: Record<string, HolyGrailFoundEntry>,
+  options: { includeFateCards?: boolean } = {},
 ): HolyGrailFoundEntry | null {
   let latest: { entry: HolyGrailFoundEntry; time: number; index: number } | null = null;
   let index = 0;
 
   for (const entry of Object.values(found)) {
+    if (!options.includeFateCards && entry?.category === "fateCards") {
+      index += 1;
+      continue;
+    }
     const time = Date.parse(entry?.firstFoundAt ?? "");
     if (!Number.isFinite(time)) { index += 1; continue; }
     if (!latest || time > latest.time || (time === latest.time && index > latest.index)) {

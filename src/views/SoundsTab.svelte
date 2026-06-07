@@ -1,13 +1,19 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
-  import { Button } from '../components';
+  import { Button, SubTabs } from '../components';
+  import ItemSoundsPanel from '../components/ItemSoundsPanel.svelte';
   import { FILTERBLADE_SOUND_PACKS, filterBladeSoundUrl } from '../lib/filterblade-sounds';
   import { settingsStore, type SoundSlot, type SoundSource } from '../stores';
   import { playSound } from '../lib/sound-player';
 
   const ACCEPT = '.mp3,.wav,.ogg,.m4a,.flac';
   const MAX_BYTES = 5 * 1024 * 1024;
+  const subTabs = [
+    { id: 'sound-slots', label: 'Sound Slots' },
+    { id: 'item-sounds', label: 'Item Sounds' },
+  ];
 
+  let activeSubTab = $state('sound-slots');
   let masterVolume = $derived(settingsStore.settings.soundVolume);
   let slots = $derived(settingsStore.settings.sounds);
 
@@ -198,189 +204,195 @@
 </script>
 
 <section class="tab-content">
-  <div class="settings-section">
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Master volume</span>
-        <span class="setting-hint">
-          Multiplied with each slot's per-sound volume. Set to 0 to silence everything.
-        </span>
-      </div>
-      <div class="setting-control">
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={masterVolume}
-          oninput={handleMasterVolumeInput}
-          class="slider"
-          aria-label="Master sound volume"
-        />
-        <span class="setting-value">{Math.round(masterVolume * 100)}%</span>
-      </div>
-    </div>
-  </div>
+  <SubTabs tabs={subTabs} bind:activeTab={activeSubTab} ariaLabel="Sounds sections" />
 
-  <div class="settings-section">
-    <h2 class="section-title">Sounds</h2>
-
-    <div class="filterblade-panel">
-      <div class="filterblade-copy">
-        <h3>FilterBlade Community Sounds</h3>
-        <p>
-          Optional local download from FilterBlade. SoE Companion does not bundle or redistribute these files;
-          choosing one here saves it into your app data and assigns it to a sound slot.
-        </p>
-      </div>
-
-      <div class="filterblade-controls">
-        <label>
-          <span>Pack</span>
-          <select value={filterBladePack} onchange={handleFilterBladePackChange}>
-            {#each FILTERBLADE_SOUND_PACKS as pack}
-              <option value={pack.name}>{pack.label}</option>
-            {/each}
-          </select>
-        </label>
-
-        <label>
-          <span>Clip</span>
-          <select value={filterBladeFile} onchange={handleFilterBladeFileChange}>
-            {#each selectedFilterBladePack?.clips ?? [] as clip}
-              <option value={clip.fileName}>{clip.label}</option>
-            {/each}
-          </select>
-        </label>
-
-        <label>
-          <span>Slot</span>
-          <select value={String(filterBladeSlot)} onchange={handleFilterBladeSlotChange}>
-            {#each slots as _slot, i}
-              <option value={i + 1}>Sound {i + 1}</option>
-            {/each}
-          </select>
-        </label>
-
-        <label class="preview-volume">
-          <span>Preview volume</span>
-          <div class="preview-volume-control">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={filterBladePreviewVolume}
-              oninput={handleFilterBladePreviewVolumeInput}
-              class="slider"
-              aria-label="FilterBlade preview volume"
-            />
-            <span class="setting-value">{Math.round(filterBladePreviewVolume * 100)}%</span>
-          </div>
-        </label>
-
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={filterBladeBusy}
-          onclick={handleDownloadFilterBladeSound}
-        >
-          {filterBladeBusy ? 'Downloading...' : 'Download to Slot'}
-        </Button>
-
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={filterBladeBusy}
-          onclick={handlePreviewFilterBladeSound}
-        >
-          Preview
-        </Button>
-      </div>
-
-      {#if filterBladeStatus}
-        <div class="filterblade-status">{filterBladeStatus}</div>
-      {/if}
-    </div>
-
-    {#each slots as slot, i (i)}
-      {@const slotIndex = i + 1}
-      {@const empty = isEmpty(slot.source)}
-      <div class="slot-row">
-        <div class="slot-num" class:slot-num-empty={empty}>{slotIndex}</div>
-
-        <input
-          class="slot-label"
-          class:slot-label-empty={empty}
-          type="text"
-          value={slot.label}
-          placeholder={`Sound ${slotIndex}`}
-          oninput={(e) => handleLabelInput(slotIndex, e)}
-          aria-label={`Label for sound ${slotIndex}`}
-        />
-
-        <div class="slot-volume" class:slot-volume-empty={empty}>
+  {#if activeSubTab === 'sound-slots'}
+    <div class="settings-section">
+      <div class="setting-row">
+        <div class="setting-info">
+          <span class="setting-label">Master volume</span>
+          <span class="setting-hint">
+            Multiplied with each slot's per-sound volume. Set to 0 to silence everything.
+          </span>
+        </div>
+        <div class="setting-control">
           <input
             type="range"
             min="0"
             max="1"
             step="0.05"
-            value={slot.volume}
-            disabled={empty}
-            oninput={(e) => handleSlotVolumeInput(slotIndex, e)}
+            value={masterVolume}
+            oninput={handleMasterVolumeInput}
             class="slider"
-            aria-label={`Volume for sound ${slotIndex}`}
+            aria-label="Master sound volume"
           />
-          <span class="setting-value">{Math.round(slot.volume * 100)}%</span>
+          <span class="setting-value">{Math.round(masterVolume * 100)}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h2 class="section-title">Sounds</h2>
+
+      <div class="filterblade-panel">
+        <div class="filterblade-copy">
+          <h3>FilterBlade Community Sounds</h3>
+          <p>
+            Optional local download from FilterBlade. SoE Companion does not bundle or redistribute these files;
+            choosing one here saves it into your app data and assigns it to a sound slot.
+          </p>
         </div>
 
-        <div class="slot-actions">
-          {#if !empty}
-            <Button
-              variant="secondary"
-              size="sm"
-              onclick={() => handlePlay(slotIndex)}
-            >
-              Play
-            </Button>
-          {/if}
+        <div class="filterblade-controls">
+          <label>
+            <span>Pack</span>
+            <select value={filterBladePack} onchange={handleFilterBladePackChange}>
+              {#each FILTERBLADE_SOUND_PACKS as pack}
+                <option value={pack.name}>{pack.label}</option>
+              {/each}
+            </select>
+          </label>
 
-          <Button variant="secondary" size="sm" onclick={() => {
-            document.getElementById(fileInputId(slotIndex))?.click();
-          }}>
-            {empty ? 'Upload' : 'Replace'}
+          <label>
+            <span>Clip</span>
+            <select value={filterBladeFile} onchange={handleFilterBladeFileChange}>
+              {#each selectedFilterBladePack?.clips ?? [] as clip}
+                <option value={clip.fileName}>{clip.label}</option>
+              {/each}
+            </select>
+          </label>
+
+          <label>
+            <span>Slot</span>
+            <select value={String(filterBladeSlot)} onchange={handleFilterBladeSlotChange}>
+              {#each slots as _slot, i}
+                <option value={i + 1}>Sound {i + 1}</option>
+              {/each}
+            </select>
+          </label>
+
+          <label class="preview-volume">
+            <span>Preview volume</span>
+            <div class="preview-volume-control">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={filterBladePreviewVolume}
+                oninput={handleFilterBladePreviewVolumeInput}
+                class="slider"
+                aria-label="FilterBlade preview volume"
+              />
+              <span class="setting-value">{Math.round(filterBladePreviewVolume * 100)}%</span>
+            </div>
+          </label>
+
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={filterBladeBusy}
+            onclick={handleDownloadFilterBladeSound}
+          >
+            {filterBladeBusy ? 'Downloading...' : 'Download to Slot'}
           </Button>
-          <input
-            id={fileInputId(slotIndex)}
-            type="file"
-            accept={ACCEPT}
-            class="file-input-hidden"
-            onchange={(e) => handleFilePicked(slotIndex, e)}
-          />
 
-          {#if isBuiltin(slotIndex) && isCustom(slot.source)}
-            <Button variant="secondary" size="sm" onclick={() => handleReset(slotIndex)}>
-              Reset
-            </Button>
-          {/if}
-
-          {#if !isBuiltin(slotIndex) && isCustom(slot.source)}
-            <Button variant="secondary" size="sm" onclick={() => handleDelete(slotIndex)}>
-              Delete
-            </Button>
-          {/if}
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={filterBladeBusy}
+            onclick={handlePreviewFilterBladeSound}
+          >
+            Preview
+          </Button>
         </div>
 
-        {#if errors[slotIndex]}
-          <div class="slot-error">{errors[slotIndex]}</div>
+        {#if filterBladeStatus}
+          <div class="filterblade-status">{filterBladeStatus}</div>
         {/if}
       </div>
-    {/each}
 
-    <div class="add-row">
-      <Button variant="secondary" size="sm" onclick={handleAdd}>+ Add sound</Button>
+      {#each slots as slot, i (i)}
+        {@const slotIndex = i + 1}
+        {@const empty = isEmpty(slot.source)}
+        <div class="slot-row">
+          <div class="slot-num" class:slot-num-empty={empty}>{slotIndex}</div>
+
+          <input
+            class="slot-label"
+            class:slot-label-empty={empty}
+            type="text"
+            value={slot.label}
+            placeholder={`Sound ${slotIndex}`}
+            oninput={(e) => handleLabelInput(slotIndex, e)}
+            aria-label={`Label for sound ${slotIndex}`}
+          />
+
+          <div class="slot-volume" class:slot-volume-empty={empty}>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={slot.volume}
+              disabled={empty}
+              oninput={(e) => handleSlotVolumeInput(slotIndex, e)}
+              class="slider"
+              aria-label={`Volume for sound ${slotIndex}`}
+            />
+            <span class="setting-value">{Math.round(slot.volume * 100)}%</span>
+          </div>
+
+          <div class="slot-actions">
+            {#if !empty}
+              <Button
+                variant="secondary"
+                size="sm"
+                onclick={() => handlePlay(slotIndex)}
+              >
+                Play
+              </Button>
+            {/if}
+
+            <Button variant="secondary" size="sm" onclick={() => {
+              document.getElementById(fileInputId(slotIndex))?.click();
+            }}>
+              {empty ? 'Upload' : 'Replace'}
+            </Button>
+            <input
+              id={fileInputId(slotIndex)}
+              type="file"
+              accept={ACCEPT}
+              class="file-input-hidden"
+              onchange={(e) => handleFilePicked(slotIndex, e)}
+            />
+
+            {#if isBuiltin(slotIndex) && isCustom(slot.source)}
+              <Button variant="secondary" size="sm" onclick={() => handleReset(slotIndex)}>
+                Reset
+              </Button>
+            {/if}
+
+            {#if !isBuiltin(slotIndex) && isCustom(slot.source)}
+              <Button variant="secondary" size="sm" onclick={() => handleDelete(slotIndex)}>
+                Delete
+              </Button>
+            {/if}
+          </div>
+
+          {#if errors[slotIndex]}
+            <div class="slot-error">{errors[slotIndex]}</div>
+          {/if}
+        </div>
+      {/each}
+
+      <div class="add-row">
+        <Button variant="secondary" size="sm" onclick={handleAdd}>+ Add sound</Button>
+      </div>
     </div>
-  </div>
+  {:else if activeSubTab === 'item-sounds'}
+    <ItemSoundsPanel />
+  {/if}
 </section>
 
 <style>

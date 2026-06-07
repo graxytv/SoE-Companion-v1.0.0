@@ -344,6 +344,7 @@ mod tests {
         ItemDropEvent {
             unit_id: 1,
             class: 0,
+            item_code: String::new(),
             quality: quality.d2_quality_name().to_string(),
             name: name.to_string(),
             base_name: String::new(),

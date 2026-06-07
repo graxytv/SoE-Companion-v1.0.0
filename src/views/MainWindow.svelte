@@ -1,6 +1,6 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
-    import { listen } from "@tauri-apps/api/event";
+    import { emit, listen } from "@tauri-apps/api/event";
     import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
     import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
     import { onMount } from "svelte";
@@ -8,7 +8,7 @@
     import { windowState, itemsDictionaryStore, settingsStore, type DropTrackerStateSnapshot, type WindowState } from "../stores";
     import { categorizeDrop } from "../lib/drop-tracker-categories";
     import { buildHolyGrailItems, findHolyGrailItem } from "../lib/holy-grail";
-    import { AchievementsTab, GeneralTab, HomeTab, LootFilterTab, NotificationsTab, SoundsTab, DropsTrackerTab, HolyGrailTab, SoeWikiTab } from "./index";
+    import { AchievementsTab, FateCardsTab, GeneralTab, HomeTab, LootFilterTab, NotificationsTab, SoundsTab, DropsTrackerTab, HolyGrailTab, SoeWikiTab } from "./index";
 
     let scannerStatus = $state<
         "stopped" | "starting" | "running" | "stopping" | "error"
@@ -25,11 +25,27 @@
         matchedText: string;
     }
 
+    interface CharacterLevelSyncEntry {
+        name: string;
+        class_name: string;
+        level: number;
+        path: string;
+    }
+
+    interface CharacterLevelSyncResult {
+        characters: CharacterLevelSyncEntry[];
+        scanned_dirs: string[];
+        message: string;
+    }
+
     // Grail drop log watcher state
     let grailDropCount = $state(0);
     const GAME_ENTRY_TRACKING_SUPPRESSION_MS = 10_000;
     const MAX_LIVE_KILL_DELTA = 50_000;
+    const FATE_CARD_BACKGROUND_SYNC_INTERVAL_MS = 30 * 1000;
     let suppressTrackingUntilMs = $state(0);
+    let fateCardBackgroundSyncBusy = false;
+    let masterSyncing = $state(false);
 
     const tabs = [
         { id: "home", label: "Home" },
@@ -40,6 +56,7 @@
         { id: "sounds", label: "Sounds" },
         { id: "achievements", label: "Achievements" },
         { id: "holy-grail", label: "Holy Grail" },
+        { id: "fate-cards", label: "Fate Cards" },
         { id: "soe-wiki", label: "SoE Wiki" },
     ];
 
@@ -97,7 +114,8 @@
 
         const item = { name, quality, is_runeword: quality.toLowerCase() === 'runeword' };
         const grailItem = findHolyGrailItem(name);
-        const isNewGrailItem = !!grailItem && !settingsStore.settings.holyGrailFound[grailItem.key];
+        const grailEligible = grailItem?.category !== 'fateCards';
+        const isNewGrailItem = !!grailItem && grailEligible && !settingsStore.settings.holyGrailFound[grailItem.key];
         if (grailItem && isNewGrailItem) {
             settingsStore.setHolyGrailFound(grailItem.key, grailItem.name, grailItem.category, true);
         }
@@ -149,6 +167,119 @@
         });
     }
 
+    interface RuneStashSyncResult {
+        counts: Partial<Record<string, number>>;
+        fate_card_counts?: Partial<Record<string, number>>;
+        fate_card_sync_available?: boolean;
+        scanned_files: string[];
+        message: string;
+    }
+
+    function evaluateAchievementUnlocks(): void {
+        settingsStore.evaluateAchievementUnlocks({
+            holyGrailFound: settingsStore.settings.holyGrailFound,
+            holyGrailItems: buildHolyGrailItems(itemsDictionaryStore.dict),
+            runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
+        });
+    }
+
+    function mergeAccountStatsSyncResult(result: AccountStatsSyncResult): void {
+        const currentStats = settingsStore.settings.achievementStats;
+        const incomingKills = Number(result.totalKills) || 0;
+        const mergedBossKills = { ...currentStats.bossKills };
+        for (const [key, value] of Object.entries(result.bossKills ?? {})) {
+            mergedBossKills[key] = Math.max(Number(mergedBossKills[key]) || 0, Number(value) || 0);
+        }
+        settingsStore.updateAchievementStats({
+            totalKills: Math.max(Number(currentStats.totalKills) || 0, incomingKills),
+            bossKills: mergedBossKills,
+        });
+    }
+
+    function applyCharacterLevelSyncResult(result: CharacterLevelSyncResult): void {
+        if (result.characters.length === 0) return;
+        settingsStore.updateAchievementStats({
+            characterLevels: Object.fromEntries(
+                result.characters.map((character) => [
+                    character.name,
+                    {
+                        name: character.name,
+                        className: character.class_name,
+                        level: character.level,
+                    },
+                ]),
+            ),
+        });
+    }
+
+    async function syncEverything(): Promise<void> {
+        if (masterSyncing) return;
+        masterSyncing = true;
+        const failed: string[] = [];
+
+        try {
+            try {
+                const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                if (result.fate_card_sync_available !== false) {
+                    settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
+                }
+                await emit("master-shared-stash-synced", result);
+            } catch (error) {
+                console.warn("[MainWindow] Master shared-stash sync failed:", error);
+                failed.push("stash");
+            }
+
+            try {
+                const result = await invoke<AccountStatsSyncResult>("sync_accountstats_kills", {
+                    currentKills: settingsStore.settings.achievementStats.totalKills,
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                mergeAccountStatsSyncResult(result);
+            } catch (error) {
+                console.warn("[MainWindow] Master account-stats sync failed:", error);
+                failed.push("account stats");
+            }
+
+            try {
+                const result = await invoke<CharacterLevelSyncResult>("sync_character_levels", {
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                applyCharacterLevelSyncResult(result);
+            } catch (error) {
+                console.warn("[MainWindow] Master character-level sync failed:", error);
+                failed.push("character levels");
+            }
+
+            evaluateAchievementUnlocks();
+            if (failed.length > 0) {
+                console.warn("[MainWindow] Master sync completed with failures:", failed);
+            }
+        } finally {
+            masterSyncing = false;
+        }
+    }
+
+    async function syncFateCardsInBackground(): Promise<void> {
+        if (fateCardBackgroundSyncBusy) return;
+        if (masterSyncing) return;
+        if (activeTab === "fate-cards" || activeTab === "holy-grail") return;
+        fateCardBackgroundSyncBusy = true;
+        try {
+            const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
+                stashPath: settingsStore.settings.runewordPlannerStashPath,
+            });
+            if (result.fate_card_sync_available !== false) {
+                settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
+            }
+        } catch (error) {
+            console.warn("[MainWindow] Background Fate Card stash sync failed:", error);
+        } finally {
+            fateCardBackgroundSyncBusy = false;
+        }
+    }
+
     async function saveWindowState() {
         try {
             const window = getCurrentWebviewWindow();
@@ -187,6 +318,10 @@
 
         restoreWindowState();
         itemsDictionaryStore.init();
+        void syncFateCardsInBackground();
+        const fateCardSyncTimer = globalThis.setInterval(() => {
+            void syncFateCardsInBackground();
+        }, FATE_CARD_BACKGROUND_SYNC_INTERVAL_MS);
 
         // Scanner / game status (kept for overlay compatibility)
         listen<string>("scanner-status", (event) => {
@@ -241,6 +376,7 @@
         window.onResized(debouncedSave).then((u) => unlisteners.push(u));
 
         return () => {
+            globalThis.clearInterval(fateCardSyncTimer);
             if (saveTimeout) clearTimeout(saveTimeout);
             unlisteners.forEach((u) => u());
             itemsDictionaryStore.destroy();
@@ -256,9 +392,17 @@
         </div>
 
         <div class="header-right">
-            <button class="donate-card" type="button" onclick={() => openExternalUrl("https://www.own3d.pro/u/graxy_tv/tip")}>
-                <strong>Donate</strong>
-            </button>
+            <div class="master-sync">
+                <button
+                    class="sync-card"
+                    type="button"
+                    disabled={masterSyncing}
+                    title="Sync shared stash, Fate Cards, account stats, and character levels"
+                    onclick={syncEverything}
+                >
+                    <strong>{masterSyncing ? "Syncing" : "Sync All"}</strong>
+                </button>
+            </div>
 
             <div class="status-bar">
                 <div class="status-item">
@@ -296,6 +440,8 @@
                     <DropsTrackerTab bind:activeSubTab={dropsTrackerSubTab} />
                 {:else if tab === "holy-grail"}
                     <HolyGrailTab bind:activeSubTab={holyGrailSubTab} grailDropCount={grailDropCount} />
+                {:else if tab === "fate-cards"}
+                    <FateCardsTab />
                 {:else if tab === "soe-wiki"}
                     <SoeWikiTab />
                 {/if}
@@ -305,6 +451,9 @@
 
     <footer class="footer">
         <span class="footer-text">Created by Graxy_TV</span>
+        <button class="donate-card" type="button" onclick={() => openExternalUrl("https://www.own3d.pro/u/graxy_tv/tip")}>
+            <strong>Donate</strong>
+        </button>
         <div class="footer-socials" aria-label="Graxy_TV links">
             <button type="button" title="YouTube" aria-label="YouTube" onclick={() => openExternalUrl("https://www.youtube.com/@graxy_tv")}>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 7.2a3 3 0 0 0-2.1-2.1C17.6 4.6 12 4.6 12 4.6s-5.6 0-7.5.5a3 3 0 0 0-2.1 2.1C2 9.1 2 12 2 12s0 2.9.4 4.8a3 3 0 0 0 2.1 2.1c1.9.5 7.5.5 7.5.5s5.6 0 7.5-.5a3 3 0 0 0 2.1-2.1c.4-1.9.4-4.8.4-4.8s0-2.9-.4-4.8ZM10 15.5v-7l6 3.5-6 3.5Z"/></svg>
@@ -380,11 +529,17 @@
         border-radius: var(--radius-md);
     }
 
-    .donate-card {
+    .master-sync {
         display: flex;
         align-items: center;
         justify-content: center;
-        min-width: 84px;
+    }
+
+    .sync-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 96px;
         height: 36px;
         padding: 0 var(--space-3);
         border: 1px solid #f8d36a;
@@ -396,19 +551,55 @@
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 0 14px rgba(255, 178, 42, 0.16);
     }
 
-    .donate-card:hover {
+    .sync-card:hover:not(:disabled) {
         border-color: #ffe89b;
         background: linear-gradient(180deg, #ffe17d 0%, #f2ae35 100%);
         color: #000;
     }
 
+    .sync-card:disabled {
+        cursor: wait;
+        opacity: 0.7;
+    }
+
+    .sync-card strong {
+        color: inherit;
+        font-family: var(--font-display);
+        font-size: 13px;
+        line-height: 1;
+        text-transform: uppercase;
+        letter-spacing: 0;
+    }
+
+    .donate-card {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 64px;
+        height: 18px;
+        padding: 0 8px;
+        border: 1px solid #77d8ff;
+        border-radius: var(--radius-sm);
+        background: linear-gradient(180deg, #c6f0ff 0%, #8ddfff 100%);
+        color: #06121a;
+        cursor: pointer;
+        text-align: center;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 0 8px rgba(120, 210, 255, 0.12);
+    }
+
+    .donate-card:hover {
+        border-color: #b8efff;
+        background: linear-gradient(180deg, #dcf8ff 0%, #a6e9ff 100%);
+        color: #06121a;
+    }
+
     .donate-card strong {
         color: inherit;
         font-family: "Brush Script MT", "Segoe Script", cursive;
-        font-size: 20px;
+        font-size: 13px;
         font-weight: 900;
         line-height: 1;
-        text-shadow: 0 1px 0 rgba(255, 246, 190, 0.65);
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
     }
 
     .status-item {

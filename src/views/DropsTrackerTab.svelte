@@ -21,6 +21,7 @@
 
   const subTabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'identified-drops', label: 'Identified Drops' },
     { id: 'tracker-settings', label: 'Tracker Settings' },
     { id: 'drops-overlay', label: 'Drops Tracker Overlay Settings' },
     { id: 'total-overlay', label: 'Total Drops Overlay Settings' },
@@ -538,9 +539,9 @@
       </div>
     </div>
   </div>
-  {:else}
+  {:else if activeSubTab === 'identified-drops'}
   <IdentifiedDropsPanel />
-
+  {:else}
   <div class="settings-section tracker-section recent-items-section">
     <div class="tracker-heading">
       <h2 class="section-title tracker-title-gold">Recently Tracked Items</h2>

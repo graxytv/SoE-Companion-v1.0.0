@@ -5,8 +5,7 @@
   import Button from './Button.svelte';
   import HotkeyInput from './HotkeyInput.svelte';
   import Toggle from './Toggle.svelte';
-  import { itemsDictionaryStore, settingsStore, type HotkeyConfig } from '../stores';
-  import { buildHolyGrailItems } from '../lib/holy-grail';
+  import { settingsStore, type HotkeyConfig } from '../stores';
   import { playSound } from '../lib/sound-player';
 
   interface Props {
@@ -24,18 +23,6 @@
     logSize: number;
     message: string;
     dllPath: string;
-  }
-
-  interface AccountStatsSyncResult {
-    totalKills: number;
-    bossKills: Record<string, number>;
-    matchedText: string;
-  }
-
-  interface RuneStashSyncResult {
-    counts: Partial<Record<string, number>>;
-    scanned_files: string[];
-    message: string;
   }
 
   interface SoeFilterProfile {
@@ -103,6 +90,7 @@
         settingsStore.settings.dropsTrackerEnabled ||
         settingsStore.settings.totalDropsTrackerEnabled ||
         settingsStore.settings.holyGrailOverlayEnabled ||
+        settingsStore.settings.fateCardTrackerOverlayEnabled ||
         settingsStore.settings.materialTrackerOverlayEnabled ||
         settingsStore.settings.runeTrackerOverlayEnabled ||
         settingsStore.settings.achievementSettings.overlayEnabled ||
@@ -261,7 +249,7 @@
     filterMessage = 'Copying filter text...';
     try {
       const active = settingsStore.settings.activeProfile;
-      const useActive = active && active !== 'Kryzard SoE' && active !== 'Kryzard_SoE';
+      const useActive = active && active !== 'Hiim_SOE' && active !== 'Kryzard SoE' && active !== 'Kryzard_SoE';
       const text = useActive
         ? await invoke<string>('load_soe_filter_profile', { name: active })
         : await invoke<string>('get_bundled_soe_filter');
@@ -287,7 +275,9 @@
     busy = `filter-${name}`;
     filterMessage = `Copying ${resolved}...`;
     try {
-      const text = await invoke<string>('load_soe_filter_profile', { name: resolved });
+      const text = resolved === 'Hiim_SOE'
+        ? await invoke<string>('get_bundled_soe_filter')
+        : await invoke<string>('load_soe_filter_profile', { name: resolved });
       await navigator.clipboard.writeText(text);
       filterMessage = `${resolved} copied. Paste it into the filter file Diablo II says it loaded.`;
     } catch (error) {
@@ -317,51 +307,9 @@
   function saveStashPath(): void {
     const path = stashPathDraft.trim();
     settingsStore.setRunewordPlannerStashPath(path || null);
-    accountStatsMessage = path ? 'Shared stash path saved.' : 'Shared stash path cleared.';
-  }
-
-  async function syncAccountStats(): Promise<void> {
-    busy = 'account-stats';
-    accountStatsMessage = 'Syncing account stats...';
-    try {
-      const stats = settingsStore.settings.achievementStats;
-      const result = await invoke<AccountStatsSyncResult>('sync_accountstats_kills', {
-        currentKills: stats.totalKills,
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
-      });
-      settingsStore.updateAchievementStats({
-        totalKills: result.totalKills,
-        bossKills: {
-          ...stats.bossKills,
-          ...result.bossKills,
-        },
-      });
-      settingsStore.evaluateAchievementUnlocks({
-        holyGrailFound: settingsStore.settings.holyGrailFound,
-        holyGrailItems: buildHolyGrailItems(itemsDictionaryStore.dict),
-        runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
-      });
-      accountStatsMessage = `Synced ${result.totalKills.toLocaleString()} Monster Kills.`;
-    } catch (error) {
-      accountStatsMessage = String(error);
-    } finally {
-      busy = '';
-    }
-  }
-
-  async function testRuneSync(): Promise<void> {
-    busy = 'runes';
-    accountStatsMessage = 'Checking Materials-tab rune counts...';
-    try {
-      const result = await invoke<RuneStashSyncResult>('sync_shared_stash_runes', {
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
-      });
-      accountStatsMessage = result.message;
-    } catch (error) {
-      accountStatsMessage = `Rune sync failed: ${error}`;
-    } finally {
-      busy = '';
-    }
+    accountStatsMessage = path
+      ? 'Shared stash path saved. Use the header Sync button to refresh stash, account stats, and character levels.'
+      : 'Shared stash path cleared.';
   }
 
   function handleGrailSoundChange(event: Event): void {
@@ -540,7 +488,7 @@
         {:else if activeStep === 'stash'}
           <div class="step-card">
             <h3>Shared Stash & Account Stats</h3>
-            <p>Runeword planning reads runes from the Materials tab in `pd2_shared.stash`. Achievements use account stats from the same stash data plus live kill updates while the game is running.</p>
+            <p>Runeword planning, Fate Cards, account stats, and character levels sync from your shared stash/save folder. Save the path here, then use the header Sync button to refresh everything at once.</p>
             <label class="field">
               <span>Shared Stash File</span>
               <select value={settingsStore.settings.runewordPlannerStashPath ?? ''} onchange={(event) => {
@@ -561,8 +509,6 @@
             <div class="action-row">
               <Button variant="secondary" size="sm" disabled={busy === 'stash-detect'} onclick={detectStash}>Detect Stash</Button>
               <Button variant="secondary" size="sm" onclick={saveStashPath}>Save Path</Button>
-              <Button variant="primary" size="sm" disabled={busy === 'account-stats'} onclick={syncAccountStats}>Sync Account Stats</Button>
-              <Button variant="secondary" size="sm" disabled={busy === 'runes'} onclick={testRuneSync}>Test Rune Sync</Button>
             </div>
             {#if accountStatsMessage}<p class="step-message">{accountStatsMessage}</p>{/if}
           </div>
@@ -632,6 +578,10 @@
                 <Toggle checked={settingsStore.settings.holyGrailOverlayEnabled} onchange={(enabled) => settingsStore.setHolyGrailOverlayEnabled(enabled)} />
               </label>
               <label class="overlay-toggle-card">
+                <span>Fate Cards</span>
+                <Toggle checked={settingsStore.settings.fateCardTrackerOverlayEnabled} onchange={(enabled) => settingsStore.setFateCardTrackerOverlayEnabled(enabled)} />
+              </label>
+              <label class="overlay-toggle-card">
                 <span>Mats Tracker</span>
                 <Toggle checked={settingsStore.settings.materialTrackerOverlayEnabled} onchange={(enabled) => settingsStore.setMaterialTrackerOverlayEnabled(enabled)} />
               </label>
@@ -660,6 +610,7 @@
             <div class="action-row">
               <Button variant="secondary" size="sm" onclick={() => openTab('drops-tracker')}>Open Drops Tracker</Button>
               <Button variant="secondary" size="sm" onclick={() => openTab('holy-grail')}>Open Holy Grail</Button>
+              <Button variant="secondary" size="sm" onclick={() => openTab('fate-cards')}>Open Fate Cards</Button>
               <Button variant="secondary" size="sm" onclick={() => openTab('achievements')}>Open Achievements</Button>
             </div>
           </div>

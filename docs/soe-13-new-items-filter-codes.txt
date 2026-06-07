@@ -1,0 +1,134 @@
+Category	Item name	Filter code
+Unique	Tabula Rasa	smer
+Unique	Svalinn	uts
+Unique	Rathpith Globe	uuc
+Unique	Screams of the Dessicated	utbe
+Hatred Orb	Hatred Orb of Equipment	hor1
+Hatred Orb	Hatred Orb of Accessories	hor2
+Hatred Orb	Hatred Orb of Essences	hor3
+Hatred Orb	Hatred Orb of Fate Cards	hor4
+Hatred Orb	Hatred Orb of Runes	hor5
+Hatred Orb	Hatred Orb of Currency	hor6
+Fate Card	The Apothecary	fa01
+Fate Card	The Eye of Terror	fa02
+Fate Card	The Doctor	fa03
+Fate Card	The Sephiroth	fa04
+Fate Card	The Immortal	fa05
+Fate Card	Wealth and Power	fa06
+Fate Card	House of Mirrors	fa07
+Fate Card	Unrequited Love	fa08
+Fate Card	Seraphic Favor	fa09
+Fate Card	Alluring Bounty	fa10
+Fate Card	A Fate Worse Than Death	fa11
+Fate Card	A Stone Perfected	fa12
+Fate Card	Lonely Warrior	fa13
+Fate Card	The Polymath	fa14
+Fate Card	Iridescent Dream	fa15
+Fate Card	The Web	fa16
+Fate Card	I see Brothers	fa17
+Fate Card	The Reaper	fa18
+Fate Card	The Shieldbearer	fa19
+Fate Card	The Avenger	fa20
+Fate Card	Gemcutter's Promise	fa21
+Fate Card	Chaotic Disposition	fa22
+Fate Card	The Unexpected Prize	fa23
+Fate Card	Further Invention	fa24
+Fate Card	Gemcutter's Mercy	fa25
+Fate Card	Lost Worlds	fa26
+Fate Card	Boundless Realms	fa27
+Fate Card	The Journey	fa28
+Fate Card	Cartographer's Delight	fa29
+Fate Card	The Cartographer	fa30
+Fate Card	More is Never Enough	fa31
+Fate Card	Ambush	fa32
+Fate Card	The Artist	fa33
+Fate Card	Misery in Darkness	fa34
+Fate Card	Bowyer's Dream	fa35
+Fate Card	Dormant Allure	fa36
+Fate Card	The Assegai	fa37
+Fate Card	The Rite of Elements	fa38
+Fate Card	Call of the First Ones	fa39
+Fate Card	Therianthropy	fa40
+Fate Card	Cursed Words	fa41
+Fate Card	The Dark Mage	fa42
+Fate Card	The Lich	fa43
+Fate Card	The Celestial Justicar	fa44
+Fate Card	The Crusader	fa45
+Fate Card	The Bulwark	fa46
+Fate Card	A Chilling Wind	fa47
+Fate Card	The Blazing Fire	fa48
+Fate Card	The Coming Storm	fa49
+Fate Card	The Warlord	fa50
+Fate Card	The Battle Born	fa51
+Fate Card	The Skirmisher	fa52
+Fate Card	The Undaunted	fa53
+Fate Card	Gemcutter's Gift	fa54
+Fate Card	The Archmage's Right Hand	fa55
+Fate Card	The Survivalist	fa56
+Fate Card	Abandoned Wealth	fa57
+Fate Card	The Scout	fa58
+Fate Card	Glimmer of Hope	fa59
+Fate Card	The Escape	fa60
+Fate Card	Humility	fa61
+Fate Card	The Saint's Treasure	fa62
+Fate Card	The Inventor	fa63
+General Currency/Material	Chaos Orb	csor
+General Currency/Material	Eternal Orb	etor
+General Currency/Material	Orb of Alchemy	ooal
+General Currency/Material	Orb of Horizons	oroh
+General Currency/Material	Cindersoul Cluster	hfmx
+General Currency/Material	Vial of Lightsong	lsvl
+Essence	Essence of Enhancement	es16
+Essence	Essence of the Mind	es59
+Essence	Essence of Haste	es25
+Essence	Essence of Insulation	es32
+Essence	Essence of Battle	es10
+Essence	Essence of Thawing	es50
+Essence	Essence of Grounding	es22
+Essence	Essence of Seeking	es41
+Essence	Essence of Antitoxin	es07
+Essence	Essence of Scorn	es38
+Essence	Essence of the Body	es56
+Essence	Essence of Rage	es35
+Essence	Essence of Sorcery	es44
+Essence	Essence of Alacrity	es04
+Essence	Essence of Spite	es47
+Essence	Essence of Ice	es28
+Essence	Greater Essence of Enhancement	es17
+Essence	Greater Essence of the Mind	es60
+Essence	Greater Essence of Haste	es26
+Essence	Greater Essence of Insulation	es33
+Essence	Greater Essence of Battle	es11
+Essence	Greater Essence of Thawing	es51
+Essence	Greater Essence of Grounding	es23
+Essence	Greater Essence of Seeking	es42
+Essence	Greater Essence of Antitoxin	es08
+Essence	Greater Essence of Scorn	es39
+Essence	Greater Essence of the Body	es57
+Essence	Greater Essence of Rage	es36
+Essence	Greater Essence of Sorcery	es45
+Essence	Greater Essence of Alacrity	es05
+Essence	Greater Essence of Spite	es48
+Essence	Greater Essence of Ice	es29
+Essence	Perfect Essence of Enhancement	es18
+Essence	Perfect Essence of the Mind	es61
+Essence	Perfect Essence of Haste	es27
+Essence	Perfect Essence of Insulation	es34
+Essence	Perfect Essence of Battle	es12
+Essence	Perfect Essence of Thawing	es52
+Essence	Perfect Essence of Grounding	es24
+Essence	Perfect Essence of Seeking	es43
+Essence	Perfect Essence of Antitoxin	es09
+Essence	Perfect Essence of Scorn	es40
+Essence	Perfect Essence of the Body	es58
+Essence	Perfect Essence of Rage	es37
+Essence	Perfect Essence of Sorcery	es46
+Essence	Perfect Essence of Alacrity	es06
+Essence	Perfect Essence of Spite	es49
+Essence	Perfect Essence of Ice	es30
+Essence	Essence of Insanity	es31
+Ascendancy	Ascendancy Cairn	ascc
+Ascendancy	Soulstone of Might	assc
+Ascendancy	Ascendancy Soulstone Tier 2	assc
+Ascendancy	Ascendancy Soulstone Tier 3	assc
+Ascendancy	Ascendancy Soulstone Tier 4	assc

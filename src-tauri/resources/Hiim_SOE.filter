@@ -83,6 +83,45 @@ ItemDisplay[hfcr]: %BORDER-68%%ORANGE%  %NAME%  %ORANGE%
 //Cinder Cluster
 ItemDisplay[hfmx]: %SOUNDID-4715%%BORDER-68%%ORANGE%  %NAME%  %ORANGE% 
 
+// SoE 13.0.0 Echoes of Hatred new item callouts
+// New unique bases from 13.0.0
+ItemDisplay[(smer OR uts OR uuc OR utbe) UNI !ID]: %MAP-4A%%SOUNDID-4719%%BORDER-9B%%GOLD%*** %NAME% ***{%NAME%}
+// Hatred Orbs
+ItemDisplay[(hor1 OR hor2 OR hor3 OR hor4 OR hor5 OR hor6)]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%RED%*%PURPLE%*%ORANGE% Hatred Orb: %NAME% %ORANGE%*%PURPLE%*%RED%*{%NAME%}
+// New SoE currency and materials
+// Chaos Orb
+ItemDisplay[csor]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Chaos Orb *{%NAME%}
+// Eternal Orb
+ItemDisplay[etor]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Eternal Orb *{%NAME%}
+// Orb of Alchemy
+ItemDisplay[ooal]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Orb of Alchemy *{%NAME%}
+// Orb of Horizons
+ItemDisplay[oroh]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Orb of Horizons *{%NAME%}
+// Cindersoul Cluster
+ItemDisplay[hfmx]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Cindersoul Cluster *{%NAME%}
+// Vial of Lightsong
+ItemDisplay[lsvl]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%ORANGE%* Vial of Lightsong *{%NAME%}
+// Ascendancy items
+ItemDisplay[(ascc OR assc)]: %MAP-0A%%SOUNDID-4719%%BORDER-9B%%PURPLE%Ascendancy: %NAME%{%NAME%}
+// T0 Fate Cards
+ItemDisplay[(fa01 OR fa02 OR fa03 OR fa04 OR fa05 OR fa06 OR fa07 OR fa08 OR fa09 OR fa10 OR fa11 OR fa12)]: %MAP-4A%%SOUNDID-4719%%BORDER-9B%%GOLD%[T0 Fate] %NAME%{%NAME%}
+// T1 Fate Cards
+ItemDisplay[(fa13 OR fa14 OR fa15 OR fa16 OR fa17 OR fa18 OR fa19 OR fa20 OR fa21)]: %MAP-4A%%SOUNDID-4719%%BORDER-68%%PURPLE%[T1 Fate] %NAME%{%NAME%}
+// T2 Fate Cards
+ItemDisplay[(fa22 OR fa23 OR fa24 OR fa25 OR fa26 OR fa27 OR fa28 OR fa29 OR fa30 OR fa31)]: %MAP-4A%%SOUNDID-4715%%BORDER-68%%CORAL%[T2 Fate] %NAME%{%NAME%}
+// T3 Fate Cards
+ItemDisplay[(fa32 OR fa33 OR fa34 OR fa35 OR fa36 OR fa37 OR fa38 OR fa39 OR fa40 OR fa41 OR fa42 OR fa43 OR fa44 OR fa45 OR fa46 OR fa47 OR fa48 OR fa49 OR fa50 OR fa51 OR fa52 OR fa53 OR fa54)]: %MAP-4A%%SOUNDID-4715%%DOT-68%%BLUE%[T3 Fate] %NAME%{%NAME%}
+// T4 Fate Cards
+ItemDisplay[(fa55 OR fa56 OR fa57 OR fa58)]: %MAP-4A%%SOUNDID-4715%%DOT-68%%GREEN%[T4 Fate] %NAME%{%NAME%}
+// T5 Fate Cards
+ItemDisplay[(fa59 OR fa60 OR fa61 OR fa62 OR fa63)]: %MAP-4A%%SOUNDID-4715%%DOT-68%%TAN%[T5 Fate] %NAME%{%NAME%}
+// Base Essences and Essence of Insanity
+ItemDisplay[(es16 OR es59 OR es25 OR es32 OR es10 OR es50 OR es22 OR es41 OR es07 OR es38 OR es56 OR es35 OR es44 OR es04 OR es47 OR es28 OR es31)]: %MAP-4A%%SOUNDID-4715%%DOT-68%%TEAL%[Essence] %NAME%{%NAME%}
+// Greater Essences
+ItemDisplay[(es17 OR es60 OR es26 OR es33 OR es11 OR es51 OR es23 OR es42 OR es08 OR es39 OR es57 OR es36 OR es45 OR es05 OR es48 OR es29)]: %MAP-4A%%SOUNDID-4715%%BORDER-68%%PURPLE%[Greater Essence] %NAME%{%NAME%}
+// Perfect Essences
+ItemDisplay[(es18 OR es61 OR es27 OR es34 OR es12 OR es52 OR es24 OR es43 OR es09 OR es40 OR es58 OR es37 OR es46 OR es06 OR es49 OR es30)]: %MAP-4A%%SOUNDID-4719%%BORDER-9B%%GOLD%[Perfect Essence] %NAME%{%NAME%}
+
 // Mythic jewel ---------------------------------------------------------
 
 ItemDisplay[mjw MAG !ID ALVL>90]: %SOUNDID-248%%GOLD%**%BLUE% %NAME% hi alvl:%ALVL%%GOLD%**

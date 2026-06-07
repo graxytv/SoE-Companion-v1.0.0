@@ -55,7 +55,11 @@ fn set_ini_key(lines: &mut Vec<String>, section: &str, key: &str, value: &str) {
     };
 
     for idx in (start + 1)..section_end {
-        if lines[idx].trim_start().to_ascii_lowercase().starts_with(&key_prefix.to_ascii_lowercase()) {
+        if lines[idx]
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with(&key_prefix.to_ascii_lowercase())
+        {
             lines[idx] = format!("{}={}", key, value);
             return;
         }
@@ -104,7 +108,12 @@ pub fn write_save_exit_automation_config(
 
     let section = "SaveExitAutomation";
     set_ini_key(&mut lines, section, "DelayMs", &delay_ms.to_string());
-    set_ini_key(&mut lines, section, "MainMenuWaitMs", &main_menu_wait_ms.to_string());
+    set_ini_key(
+        &mut lines,
+        section,
+        "MainMenuWaitMs",
+        &main_menu_wait_ms.to_string(),
+    );
     set_ini_key(&mut lines, section, "MainMenuStableMs", "800");
     set_ini_key(
         &mut lines,
@@ -115,8 +124,18 @@ pub fn write_save_exit_automation_config(
     set_ini_key(&mut lines, section, "ClickX", &click_x.to_string());
     set_ini_key(&mut lines, section, "ClickY", &click_y.to_string());
     set_ini_key(&mut lines, section, "Difficulty", difficulty);
-    set_ini_key(&mut lines, section, "HotkeyVk", &hotkey_key_code.to_string());
-    set_ini_key(&mut lines, section, "HotkeyModifiers", &hotkey_modifiers.to_string());
+    set_ini_key(
+        &mut lines,
+        section,
+        "HotkeyVk",
+        &hotkey_key_code.to_string(),
+    );
+    set_ini_key(
+        &mut lines,
+        section,
+        "HotkeyModifiers",
+        &hotkey_modifiers.to_string(),
+    );
     set_ini_key(&mut lines, section, "Step1", "ESC");
     set_ini_key(&mut lines, section, "Step2", "UP");
     set_ini_key(&mut lines, section, "Step3", "ENTER");

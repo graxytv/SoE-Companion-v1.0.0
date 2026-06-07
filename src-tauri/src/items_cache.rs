@@ -4,8 +4,8 @@
 //! restarts. In PD2 the scanner doesn't run, so we provide no-op stubs
 //! that satisfy the call sites in main.rs.
 
-use tauri::{AppHandle, Manager};
 use crate::notifier::ItemsDictionary;
+use tauri::{AppHandle, Manager};
 
 /// Save the items dictionary to the app data directory.
 /// No-op in SoE Companion — the PD2 scanner is not active.

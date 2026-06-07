@@ -11,6 +11,7 @@
     rectangularSelection,
     crosshairCursor,
     highlightSpecialChars,
+    lineNumbers,
   } from "@codemirror/view";
   import {
     defaultKeymap,
@@ -96,6 +97,7 @@
       crosshairCursor(),
       highlightActiveLine(),
       highlightActiveLineGutter(),
+      lineNumbers(),
 
       // Soft word wrap
       EditorView.lineWrapping,

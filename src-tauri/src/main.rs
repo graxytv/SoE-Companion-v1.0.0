@@ -3,6 +3,7 @@
 mod character_levels;
 mod d2types;
 mod drop_hook;
+mod grail_log;
 mod hotkeys;
 mod injection;
 mod items_cache;
@@ -20,9 +21,8 @@ mod runeword_planner;
 mod save_exit_automation;
 mod scanner_state;
 mod settings;
-mod sounds;
 mod soe_filter;
-mod grail_log;
+mod sounds;
 mod updater;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
@@ -32,9 +32,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WindowEvent};
 
-use crate::hotkeys::{
-    EditModeState, HotkeyState, MulingModeHotkeyState,
-};
+use crate::hotkeys::{EditModeState, HotkeyState, MulingModeHotkeyState};
 use crate::logger::{error as log_error, info as log_info};
 use crate::loot_history::{LootEntry, LootHistory, PickupState};
 
@@ -66,12 +64,12 @@ use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, GetForegroundWindow, GetWindowLongW, GetWindowRect, MoveWindow, SetWindowLongW,
-    SetLayeredWindowAttributes, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST,
-    LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE,
-    SW_SHOWNA, WS_BORDER, WS_CAPTION, WS_DLGFRAME, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
-    WS_THICKFRAME,
+    FindWindowW, GetForegroundWindow, GetWindowLongW, GetWindowRect, MoveWindow,
+    SetLayeredWindowAttributes, SetWindowLongW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE,
+    HWND_TOPMOST, LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SW_HIDE, SW_SHOWNA, WS_BORDER, WS_CAPTION, WS_DLGFRAME, WS_EX_LAYERED,
+    WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+    WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 
 /// Shared state for controlling the scanner
@@ -332,7 +330,13 @@ fn start_scanner_internal(
                 if ingame && !was_ingame {
                     log_info("Entered game");
                     scanner.clear_cache();
-                    scanner.suppress_item_events_for(Duration::from_secs(10));
+                    if let Ok(mut h) = loot_history.write() {
+                        h.clear();
+                    }
+                    if let Err(e) = app_handle.emit("loot-history-cleared", ()) {
+                        log_error(&format!("Failed to emit loot-history-cleared: {}", e));
+                    }
+                    scanner.suppress_item_events_for(Duration::from_secs(2));
                     #[cfg(target_os = "windows")]
                     shared_state
                         .clear_markers
@@ -921,6 +925,7 @@ fn editor_window_size(label: &str) -> Option<(u32, u32)> {
         "grail-card-overlay" => Some((240, 290)),
         "runes-card-overlay" => Some((280, 560)),
         "mats-card-overlay" => Some((280, 420)),
+        "fate-cards-card-overlay" => Some((238, 180)),
         "achievement-card-overlay" => Some((238, 86)),
         "achievement-popup-overlay" => Some((300, 88)),
         "kills-card-overlay" => Some((238, 74)),
@@ -971,6 +976,7 @@ fn overlay_editor_window_title(label: &str) -> Option<&'static str> {
         "grail-card-overlay" => Some("SoE Companion Grail Overlay"),
         "runes-card-overlay" => Some("SoE Companion Rune Overlay"),
         "mats-card-overlay" => Some("SoE Companion Mats Overlay"),
+        "fate-cards-card-overlay" => Some("SoE Companion Fate Cards Overlay"),
         "achievement-card-overlay" => Some("SoE Companion Achievement Overlay"),
         "achievement-popup-overlay" => Some("SoE Companion Achievement Popup Overlay"),
         "kills-card-overlay" => Some("SoE Companion Monster Kills Overlay"),
@@ -1059,7 +1065,9 @@ fn set_overlay_editor_window_visible(
     let (min_width, max_width) = editor_window_width_bounds(&label);
     let (min_height, max_height) = editor_window_height_bounds(&label);
     let width = width.unwrap_or(default_width).clamp(min_width, max_width);
-    let height = height.unwrap_or(default_height).clamp(min_height, max_height);
+    let height = height
+        .unwrap_or(default_height)
+        .clamp(min_height, max_height);
 
     #[cfg(target_os = "windows")]
     {
@@ -1140,13 +1148,8 @@ fn move_overlay_editor_window(
             .outer_size()
             .map(|size| (size.width as i32, size.height as i32))
             .unwrap_or((fallback_width as i32, fallback_height as i32));
-        let (clamped_x, clamped_y) = clamp_editor_window_rect(
-            &rect,
-            screen_x,
-            screen_y,
-            window_size.0,
-            window_size.1,
-        );
+        let (clamped_x, clamped_y) =
+            clamp_editor_window_rect(&rect, screen_x, screen_y, window_size.0, window_size.1);
 
         unsafe {
             let _ = SetWindowPos(
@@ -1659,10 +1662,16 @@ fn open_external_url(url: String) -> Result<(), String> {
 fn default_soe_launcher_candidates() -> Vec<std::path::PathBuf> {
     let mut candidates = vec![
         std::path::PathBuf::from(r"C:\Program Files\PD2 Sanctuary of Exile\pd2-soe-launcher.exe"),
-        std::path::PathBuf::from(r"C:\Program Files (x86)\PD2 Sanctuary of Exile\pd2-soe-launcher.exe"),
+        std::path::PathBuf::from(
+            r"C:\Program Files (x86)\PD2 Sanctuary of Exile\pd2-soe-launcher.exe",
+        ),
     ];
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        candidates.push(std::path::PathBuf::from(local).join("pd2-soe-launcher").join("pd2-soe-launcher.exe"));
+        candidates.push(
+            std::path::PathBuf::from(local)
+                .join("pd2-soe-launcher")
+                .join("pd2-soe-launcher.exe"),
+        );
     }
     candidates
 }
@@ -1680,15 +1689,25 @@ fn launch_soe_launcher(path: Option<String>) -> Result<(), String> {
     let resolved = path
         .filter(|value| !value.trim().is_empty())
         .map(std::path::PathBuf::from)
-        .or_else(|| default_soe_launcher_candidates().into_iter().find(|candidate| candidate.exists()))
-        .ok_or_else(|| "SoE launcher was not found. Set the launcher path in General.".to_string())?;
+        .or_else(|| {
+            default_soe_launcher_candidates()
+                .into_iter()
+                .find(|candidate| candidate.exists())
+        })
+        .ok_or_else(|| {
+            "SoE launcher was not found. Set the launcher path in General.".to_string()
+        })?;
 
     if !resolved.exists() {
         return Err(format!("SoE launcher not found at {}", resolved.display()));
     }
 
     std::process::Command::new(&resolved)
-        .current_dir(resolved.parent().unwrap_or_else(|| std::path::Path::new(".")))
+        .current_dir(
+            resolved
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new(".")),
+        )
         .spawn()
         .map_err(|e| format!("Failed to launch {}: {}", resolved.display(), e))?;
     Ok(())
@@ -1833,6 +1852,7 @@ fn main() {
                             "grail-card-overlay",
                             "runes-card-overlay",
                             "mats-card-overlay",
+                            "fate-cards-card-overlay",
                             "achievement-card-overlay",
                             "achievement-popup-overlay",
                             "kills-card-overlay",
@@ -1902,6 +1922,10 @@ fn main() {
             settings::restore_holy_grail_backup,
             settings::get_holy_grail_backup_status,
             settings::open_holy_grail_backup_folder,
+            settings::backup_fate_card_counts,
+            settings::restore_fate_card_counts_backup,
+            settings::get_fate_card_backup_status,
+            settings::open_fate_card_backup_folder,
             settings::backup_achievement_stats,
             settings::backup_achievement_category,
             settings::restore_achievement_backup,

@@ -33,7 +33,8 @@ fn presets_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data directory: {}", e))?
         .join("soe-filters");
-    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create SoE filters directory: {}", e))?;
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create SoE filters directory: {}", e))?;
     Ok(dir)
 }
 
@@ -98,7 +99,9 @@ pub fn list_soe_filter_profiles(app: AppHandle) -> Result<Vec<SoeFilterProfile>,
     let dir = presets_dir(&app)?;
     let mut profiles = Vec::new();
 
-    for entry in fs::read_dir(&dir).map_err(|e| format!("Failed to read SoE filter presets: {}", e))? {
+    for entry in
+        fs::read_dir(&dir).map_err(|e| format!("Failed to read SoE filter presets: {}", e))?
+    {
         let entry = match entry {
             Ok(entry) => entry,
             Err(_) => continue,
@@ -132,7 +135,8 @@ pub fn load_soe_filter_profile(app: AppHandle, name: String) -> Result<String, S
         return Err("Filter name cannot be empty".to_string());
     }
     let path = preset_path(&dir, &safe_name);
-    fs::read_to_string(&path).map_err(|e| format!("Failed to read SoE filter preset '{}': {}", safe_name, e))
+    fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read SoE filter preset '{}': {}", safe_name, e))
 }
 
 #[tauri::command]
@@ -245,8 +249,7 @@ pub fn write_installed_soe_filter(text: String) -> Result<SoeFilterState, String
 
     fs::create_dir_all(dir)
         .map_err(|e| format!("Failed to create ProjectD2 local filters directory: {}", e))?;
-    fs::write(&path, text)
-        .map_err(|e| format!("Failed to write SoE_Filter.filter: {}", e))?;
+    fs::write(&path, text).map_err(|e| format!("Failed to write SoE_Filter.filter: {}", e))?;
 
     read_installed_soe_filter()
 }

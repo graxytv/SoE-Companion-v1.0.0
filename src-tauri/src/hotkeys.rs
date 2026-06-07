@@ -884,7 +884,10 @@ pub fn update_muling_mode_hotkey(
     app: AppHandle,
     hotkey: HotkeyConfig,
 ) -> Result<(), String> {
-    log_info(&format!("Updating muling-mode hotkey to: {}", hotkey.display));
+    log_info(&format!(
+        "Updating muling-mode hotkey to: {}",
+        hotkey.display
+    ));
     state.start(app, hotkey);
     Ok(())
 }

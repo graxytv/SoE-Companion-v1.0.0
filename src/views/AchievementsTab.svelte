@@ -23,25 +23,6 @@
     exportedAt: string | null;
   }
 
-  interface AccountStatsSyncResult {
-    totalKills: number;
-    bossKills: Record<string, number>;
-    matchedText: string;
-  }
-
-  interface CharacterLevelSyncEntry {
-    name: string;
-    class_name: string;
-    level: number;
-    path: string;
-  }
-
-  interface CharacterLevelSyncResult {
-    characters: CharacterLevelSyncEntry[];
-    scanned_dirs: string[];
-    message: string;
-  }
-
   const bossKeys = [
     ['DClone:Any', 'DClone Any Tier'],
     ['DClone:T2', 'DClone T2'],
@@ -100,10 +81,6 @@
   let backupStatus = $state<BackupStatus | null>(null);
   let backupMessage = $state('');
   let confirmReset = $state(false);
-  let syncingAccountStats = $state(false);
-  let accountStatsSyncMessage = $state('');
-  let syncingCharacterLevels = $state(false);
-  let characterLevelSyncMessage = $state('');
   let newCharacterName = $state('');
   let newCharacterClass = $state('Amazon');
   let newCharacterLevel = $state(90);
@@ -255,65 +232,6 @@
     confirmReset = false;
   }
 
-  async function syncAccountStats() {
-    syncingAccountStats = true;
-    accountStatsSyncMessage = 'Reading shared stash account stats...';
-    try {
-      const result = await invoke<AccountStatsSyncResult>('sync_accountstats_kills', {
-        currentKills: stats.totalKills,
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
-      });
-      settingsStore.updateAchievementStats({
-        totalKills: result.totalKills,
-        bossKills: {
-          ...stats.bossKills,
-          ...result.bossKills,
-        },
-      });
-      settingsStore.evaluateAchievementUnlocks({
-        holyGrailFound: settingsStore.settings.holyGrailFound,
-        holyGrailItems,
-        runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
-      });
-      const bossCount = Object.keys(result.bossKills ?? {}).length;
-      accountStatsSyncMessage = `Synced ${result.totalKills.toLocaleString()} Monster Kills and ${bossCount} boss stat${bossCount === 1 ? '' : 's'}. ${result.matchedText}`;
-    } catch (error) {
-      accountStatsSyncMessage = String(error);
-    } finally {
-      syncingAccountStats = false;
-    }
-  }
-
-  async function syncCharacterLevels() {
-    syncingCharacterLevels = true;
-    characterLevelSyncMessage = 'Reading character saves...';
-    try {
-      const result = await invoke<CharacterLevelSyncResult>('sync_character_levels', {
-        stashPath: settingsStore.settings.runewordPlannerStashPath,
-      });
-      if (result.characters.length > 0) {
-        settingsStore.updateAchievementStats({
-          characterLevels: Object.fromEntries(
-            result.characters.map((character) => [
-              character.name,
-              {
-                name: character.name,
-                className: character.class_name,
-                level: character.level,
-              },
-            ]),
-          ),
-        });
-      }
-      const scannedCount = result.scanned_dirs.length;
-      characterLevelSyncMessage = `${result.message} Scanned ${scannedCount} save folder${scannedCount === 1 ? '' : 's'}.`;
-    } catch (error) {
-      characterLevelSyncMessage = String(error);
-    } finally {
-      syncingCharacterLevels = false;
-    }
-  }
-
   refreshBackupStatus();
 </script>
 
@@ -321,13 +239,10 @@
   <div class="achievement-hero">
     <div>
       <h2 class="section-title">Achievements</h2>
-      <p class="section-description">Account-wide progress, manual tracking, and local JSON backups.</p>
+      <p class="section-description">Account-wide progress, manual tracking, and local JSON backups. Use the header Sync button to refresh stats and character levels.</p>
     </div>
     <div class="achievement-hero-side">
       <div class="achievement-hero-actions">
-        <Button variant="primary" size="sm" disabled={syncingAccountStats} onclick={syncAccountStats}>
-          {syncingAccountStats ? 'Syncing...' : 'Sync Account Stats'}
-        </Button>
         <Button variant="danger" size="sm" onclick={() => (confirmReset = true)}>Reset Achievements</Button>
       </div>
       <div class="achievement-summary-card">
@@ -336,10 +251,6 @@
       </div>
     </div>
   </div>
-
-  {#if accountStatsSyncMessage}
-    <p class="accountstats-sync-message hero-sync-message">{accountStatsSyncMessage}</p>
-  {/if}
 
   {#if confirmReset}
     <div class="confirm-backdrop" role="presentation">
@@ -458,6 +369,8 @@
           <div class="manual-grid">
             <label>Total Kills <input type="number" min="0" value={stats.totalKills} oninput={(e) => setStat('totalKills', numericInput((e.currentTarget as HTMLInputElement).value))} /></label>
             <label>Unique Items Found <input type="number" min="0" value={stats.uniqueItemsFound} oninput={(e) => setStat('uniqueItemsFound', numericInput((e.currentTarget as HTMLInputElement).value))} /></label>
+            <label>Fate Cards Found <input type="number" min="0" value={stats.fateCardsFound} oninput={(e) => setStat('fateCardsFound', numericInput((e.currentTarget as HTMLInputElement).value))} /></label>
+            <label>Tier 0 Fate Cards Found <input type="number" min="0" value={stats.tier0FateCardsFound} oninput={(e) => setStat('tier0FateCardsFound', numericInput((e.currentTarget as HTMLInputElement).value))} /></label>
             <label>First Elite Unique <input type="text" value={stats.firstEliteUniqueName ?? ''} oninput={(e) => setStat('firstEliteUniqueName', (e.currentTarget as HTMLInputElement).value.trim() || null)} /></label>
           </div>
 
@@ -504,15 +417,9 @@
         <div class="level-sync-panel">
           <div>
             <h3>Character Levels</h3>
-            <p>{Object.values(stats.characterLevels).length} tracked</p>
+            <p>{Object.values(stats.characterLevels).length} tracked. Use the header Sync button to refresh saves.</p>
           </div>
-          <Button variant="secondary" size="sm" disabled={syncingCharacterLevels} onclick={syncCharacterLevels}>
-            {syncingCharacterLevels ? 'Syncing...' : 'Sync Character Levels'}
-          </Button>
         </div>
-        {#if characterLevelSyncMessage}
-          <p class="accountstats-sync-message">{characterLevelSyncMessage}</p>
-        {/if}
         {#if Object.values(stats.characterLevels).length > 0}
           <div class="level-character-grid">
             {#each Object.values(stats.characterLevels) as character (character.name)}

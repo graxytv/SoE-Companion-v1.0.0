@@ -1,3 +1,11 @@
+import {
+  SOE_13_ASCENDANCY_ITEMS,
+  SOE_13_ESSENCE_ITEMS,
+  SOE_13_FATE_CARD_ITEMS,
+  SOE_13_HATRED_ORB_ITEMS,
+  soe13ListContains,
+} from './soe-13-items';
+
 export const RUNE_NAMES = [
   "El",
   "Eld",
@@ -62,6 +70,10 @@ export const DROP_TRACKER_CATEGORIES = [
   { key: "jewel", label: "Jewel" },
   { key: "perfectGem", label: "Perfect Gem" },
   { key: "token", label: "Token" },
+  { key: "fateCard", label: "Fate Card" },
+  { key: "hatredOrb", label: "Hatred Orb" },
+  { key: "essence", label: "Essence" },
+  { key: "ascendancy", label: "Ascendancy" },
 ] as const;
 
 export type DropTrackerCategoryKey =
@@ -76,6 +88,8 @@ export interface DropTrackerItemLike {
   canonical_name?: string | null;
   canonicalName?: string | null;
   category?: string | null;
+  item_code?: string | null;
+  itemCode?: string | null;
   quality?: string | null;
   is_hellforged?: boolean | null;
   isHellforged?: boolean | null;
@@ -191,7 +205,8 @@ export function defaultDropsTrackerCategories(): DropTrackerCategorySettings {
       category.key,
       category.key === "unique" ||
         category.key === "hellforged" ||
-        category.key === "sets",
+        category.key === "sets" ||
+        category.key === "fateCard",
     ]),
   ) as DropTrackerCategorySettings;
 }
@@ -262,10 +277,18 @@ export function categorizeDrop(
   const rune = runeNameFromDrop(item);
   if (rune) categories.push(runeCategory(rune));
 
+  const itemCode = String(item.item_code || item.itemCode || "").trim().toLowerCase();
+  const fateCardCodeMatch = /^fa(\d{1,2})$/i.exec(itemCode);
+  const fateCardCodeIndex = fateCardCodeMatch ? Number.parseInt(fateCardCodeMatch[1], 10) - 1 : -1;
+  const isFateCardCode = fateCardCodeIndex >= 0 && fateCardCodeIndex < SOE_13_FATE_CARD_ITEMS.length;
   if (has(haystack, "charm") || has(haystack, "annihilus") || has(haystack, "hellfire torch")) categories.push("charm");
   if (has(haystack, "jewel")) categories.push("jewel");
   if (has(haystack, "perfect") && has(haystack, "gem")) categories.push("perfectGem");
   if (has(haystack, "token")) categories.push("token");
+  if (isFateCardCode || soe13ListContains(SOE_13_FATE_CARD_ITEMS, name) || has(haystack, "fate card")) categories.push("fateCard");
+  if (soe13ListContains(SOE_13_HATRED_ORB_ITEMS, name) || has(haystack, "hatred orb")) categories.push("hatredOrb");
+  if (soe13ListContains(SOE_13_ESSENCE_ITEMS, name) || /\b(?:greater\s+|perfect\s+)?essence\s+of\b/i.test(name)) categories.push("essence");
+  if (soe13ListContains(SOE_13_ASCENDANCY_ITEMS, name) || has(haystack, "ascendancy") || has(haystack, "soulstone")) categories.push("ascendancy");
 
   return Array.from(new Set(categories));
 }

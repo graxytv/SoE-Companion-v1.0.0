@@ -1,8 +1,23 @@
 import { MATERIAL_NAMES, materialNameFromDrop } from './item-sounds';
 import { normalizeHolyGrailKey } from './holy-grail';
 import type { DropTrackerItemLike } from './drop-tracker-categories';
+import {
+  SOE_13_ASCENDANCY_ITEMS,
+  SOE_13_ESSENCE_ITEMS,
+  SOE_13_FATE_CARD_ITEMS,
+} from './soe-13-items';
 
-export const MATERIAL_TRACKER_NAMES = MATERIAL_NAMES;
+const MATERIAL_TRACKER_EXCLUDED_KEYS = new Set(
+  [
+    ...SOE_13_FATE_CARD_ITEMS,
+    ...SOE_13_ESSENCE_ITEMS,
+    ...SOE_13_ASCENDANCY_ITEMS,
+  ].map(normalizeHolyGrailKey),
+);
+
+export const MATERIAL_TRACKER_NAMES = MATERIAL_NAMES.filter(
+  (name) => !MATERIAL_TRACKER_EXCLUDED_KEYS.has(normalizeHolyGrailKey(name)),
+);
 export type MaterialTrackerName = (typeof MATERIAL_TRACKER_NAMES)[number];
 export type MaterialTrackerCounts = Partial<Record<MaterialTrackerName, number>>;
 export type MaterialTrackerVisibility = Record<MaterialTrackerName, boolean>;

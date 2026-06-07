@@ -11,4 +11,5 @@ export { default as SoundsTab } from './SoundsTab.svelte';
 export { default as AchievementsTab } from './AchievementsTab.svelte';
 export { default as DropsTrackerTab } from './DropsTrackerTab.svelte';
 export { default as HolyGrailTab } from './HolyGrailTab.svelte';
+export { default as FateCardsTab } from './FateCardsTab.svelte';
 export { default as SoeWikiTab } from './SoeWikiTab.svelte';

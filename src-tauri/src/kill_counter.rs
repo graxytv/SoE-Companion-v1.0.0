@@ -65,8 +65,8 @@ impl AccountStatsWatcher {
         use windows::core::PCWSTR;
         use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
         use windows::Win32::Storage::FileSystem::{
-            CreateFileW, ReadDirectoryChangesW, FILE_FLAG_BACKUP_SEMANTICS,
-            FILE_LIST_DIRECTORY, FILE_NOTIFY_CHANGE_CREATION, FILE_NOTIFY_CHANGE_FILE_NAME,
+            CreateFileW, ReadDirectoryChangesW, FILE_FLAG_BACKUP_SEMANTICS, FILE_LIST_DIRECTORY,
+            FILE_NOTIFY_CHANGE_CREATION, FILE_NOTIFY_CHANGE_FILE_NAME,
             FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
             OPEN_EXISTING,
         };
@@ -86,11 +86,7 @@ impl AccountStatsWatcher {
         let stop = self.stop.clone();
 
         if dirs.is_empty() {
-            start_stash_accountstats_poll_thread(
-                app.clone(),
-                stop.clone(),
-                last_signature.clone(),
-            );
+            start_stash_accountstats_poll_thread(app.clone(), stop.clone(), last_signature.clone());
             start_live_accountstats_thread(app, stop, last_signature);
             return;
         }
@@ -277,8 +273,7 @@ fn start_stash_accountstats_poll_thread(
 #[cfg(target_os = "windows")]
 mod windows_impl {
     use super::{
-        AccountStatsLiveDebug, AccountStatsMemoryCandidate, AccountStatsResetResult,
-        KillSyncResult,
+        AccountStatsLiveDebug, AccountStatsMemoryCandidate, AccountStatsResetResult, KillSyncResult,
     };
     use crate::logger::info as log_info;
     use crate::offsets::{d2client, unit};
@@ -298,8 +293,8 @@ mod windows_impl {
         VirtualQueryEx, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_GUARD, PAGE_NOACCESS,
     };
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-        KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_RETURN,
+        SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
+        KEYEVENTF_UNICODE, VIRTUAL_KEY, VK_RETURN,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE,
@@ -506,7 +501,10 @@ mod windows_impl {
         let Ok(bytes) = ctx.process.read_buffer(player_data, 32) else {
             return "unknown".to_string();
         };
-        let end = bytes.iter().position(|byte| *byte == 0).unwrap_or(bytes.len());
+        let end = bytes
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(bytes.len());
         let name = String::from_utf8_lossy(&bytes[..end]).trim().to_string();
         if name
             .chars()
@@ -642,13 +640,17 @@ mod windows_impl {
         D2Context::new().is_ok()
     }
 
-
-    pub(super) fn read_accountstats_stash(stash_path: Option<String>) -> Result<KillSyncResult, String> {
+    pub(super) fn read_accountstats_stash(
+        stash_path: Option<String>,
+    ) -> Result<KillSyncResult, String> {
         let Some(path) = selected_or_detected_stash_path(stash_path) else {
             return Err("No pd2_shared.stash file was found.".to_string());
         };
         if !path.is_file() {
-            return Err(format!("Selected shared stash file does not exist: {}", path.display()));
+            return Err(format!(
+                "Selected shared stash file does not exist: {}",
+                path.display()
+            ));
         }
         let bytes = fs::read(&path)
             .map_err(|e| format!("Failed to read shared stash {}: {}", path.display(), e))?;
@@ -896,10 +898,8 @@ mod windows_impl {
         for base in candidates {
             match read_accountstats_from_base(&ctx, base, "live") {
                 Ok(mut result) => {
-                    result.matched_text = format!(
-                        "{} player_data=0x{:x}",
-                        result.matched_text, player_data
-                    );
+                    result.matched_text =
+                        format!("{} player_data=0x{:x}", result.matched_text, player_data);
                     if result.total_kills < baseline_kills
                         || result.total_kills > baseline_kills.saturating_add(MAX_LIVE_KILL_DELTA)
                     {
@@ -916,7 +916,10 @@ mod windows_impl {
             }
         }
 
-        Err(format!("Could not find live account stats near player data: {}", errors.join(" | ")))
+        Err(format!(
+            "Could not find live account stats near player data: {}",
+            errors.join(" | ")
+        ))
     }
 
     fn score_candidate(
@@ -964,8 +967,7 @@ mod windows_impl {
         stash: Option<&KillSyncResult>,
         baseline_kills: u64,
     ) -> Option<AccountStatsMemoryCandidate> {
-        if offset < 4 || offset + (ACCOUNT_DUNGEON_BOSS - ACCOUNT_MONSTER_KILLS) + 2 > bytes.len()
-        {
+        if offset < 4 || offset + (ACCOUNT_DUNGEON_BOSS - ACCOUNT_MONSTER_KILLS) + 2 > bytes.len() {
             return None;
         }
 
@@ -977,8 +979,14 @@ mod windows_impl {
         let rathma_t2 = read_u16_at(bytes, offset + ACCOUNT_RATHMA_T2 - ACCOUNT_MONSTER_KILLS);
         let lucion_any = read_u16_at(bytes, offset + ACCOUNT_LUCION_ANY - ACCOUNT_MONSTER_KILLS);
         let lucion_t2 = read_u16_at(bytes, offset + ACCOUNT_LUCION_T2 - ACCOUNT_MONSTER_KILLS);
-        let uber_tristram = read_u16_at(bytes, offset + ACCOUNT_UBER_TRISTRAM - ACCOUNT_MONSTER_KILLS);
-        let uber_ancients = read_u16_at(bytes, offset + ACCOUNT_UBER_ANCIENTS - ACCOUNT_MONSTER_KILLS);
+        let uber_tristram = read_u16_at(
+            bytes,
+            offset + ACCOUNT_UBER_TRISTRAM - ACCOUNT_MONSTER_KILLS,
+        );
+        let uber_ancients = read_u16_at(
+            bytes,
+            offset + ACCOUNT_UBER_ANCIENTS - ACCOUNT_MONSTER_KILLS,
+        );
         let andariel = read_u16_at(bytes, offset + ACCOUNT_ANDARIEL - ACCOUNT_MONSTER_KILLS);
         let duriel = read_u16_at(bytes, offset + ACCOUNT_DURIEL - ACCOUNT_MONSTER_KILLS);
         let mephisto = read_u16_at(bytes, offset + ACCOUNT_MEPHISTO - ACCOUNT_MONSTER_KILLS);
@@ -986,7 +994,8 @@ mod windows_impl {
         let baal = read_u16_at(bytes, offset + ACCOUNT_BAAL - ACCOUNT_MONSTER_KILLS);
         let deaths = read_u16_at(bytes, offset + ACCOUNT_DEATHS - ACCOUNT_MONSTER_KILLS);
         let map_boss = read_u16_at(bytes, offset + ACCOUNT_MAP_BOSS - ACCOUNT_MONSTER_KILLS);
-        let dungeon_boss = read_u16_at(bytes, offset + ACCOUNT_DUNGEON_BOSS - ACCOUNT_MONSTER_KILLS);
+        let dungeon_boss =
+            read_u16_at(bytes, offset + ACCOUNT_DUNGEON_BOSS - ACCOUNT_MONSTER_KILLS);
 
         let mut boss_kills = HashMap::new();
         update_boss_count(&mut boss_kills, "DClone:Any", dclone_any);
@@ -1005,7 +1014,14 @@ mod windows_impl {
         update_boss_count(&mut boss_kills, "Diablo:Any", diablo);
         update_boss_count(&mut boss_kills, "Baal:Any", baal);
 
-        let score = score_candidate(total_kills, time_played, deaths, &boss_kills, stash, baseline_kills)?;
+        let score = score_candidate(
+            total_kills,
+            time_played,
+            deaths,
+            &boss_kills,
+            stash,
+            baseline_kills,
+        )?;
         Some(AccountStatsMemoryCandidate {
             address: format!("0x{address:08x}"),
             total_kills,
@@ -1061,7 +1077,9 @@ mod windows_impl {
 
             let base = info.BaseAddress as usize;
             let size = info.RegionSize;
-            let next = base.saturating_add(size).max(address.saturating_add(0x1000));
+            let next = base
+                .saturating_add(size)
+                .max(address.saturating_add(0x1000));
 
             if info.State == MEM_COMMIT && is_readable(info.Protect.0) && size >= 0x40 {
                 let mut offset = 0usize;
@@ -1118,7 +1136,11 @@ mod windows_impl {
         while cursor + 4 <= window_end && near_words.len() < 24 {
             let value = read_u32_at(bytes, cursor);
             if value > 0 && value < 10_000_000 {
-                near_words.push(format!("{:+#04x}={}", cursor as isize - value_offset as isize, value));
+                near_words.push(format!(
+                    "{:+#04x}={}",
+                    cursor as isize - value_offset as isize,
+                    value
+                ));
             }
             cursor += 4;
         }
@@ -1198,7 +1220,9 @@ mod windows_impl {
 
             let base = info.BaseAddress as usize;
             let size = info.RegionSize;
-            let next = base.saturating_add(size).max(address.saturating_add(0x1000));
+            let next = base
+                .saturating_add(size)
+                .max(address.saturating_add(0x1000));
 
             if info.State == MEM_COMMIT && is_readable(info.Protect.0) && size >= 4 {
                 let mut offset = 0usize;
@@ -1229,7 +1253,11 @@ mod windows_impl {
             address = next;
         }
 
-        candidates.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.address.cmp(&b.address)));
+        candidates.sort_by(|a, b| {
+            b.score
+                .cmp(&a.score)
+                .then_with(|| a.address.cmp(&b.address))
+        });
         candidates.truncate(40);
         candidates
     }
@@ -1410,7 +1438,9 @@ mod windows_impl {
 
             let base = info.BaseAddress as usize;
             let size = info.RegionSize;
-            let next = base.saturating_add(size).max(address.saturating_add(0x1000));
+            let next = base
+                .saturating_add(size)
+                .max(address.saturating_add(0x1000));
 
             if info.State == MEM_COMMIT && is_readable(info.Protect.0) && size > 0 {
                 let mut offset = 0usize;
@@ -1496,8 +1526,10 @@ mod windows_impl {
             Ok(result) => result,
             Err(stash_error) => match read_accountstats_live_memory() {
                 Ok(mut result) => {
-                    result.matched_text =
-                        format!("{}; stash fallback reason: {}", result.matched_text, stash_error);
+                    result.matched_text = format!(
+                        "{}; stash fallback reason: {}",
+                        result.matched_text, stash_error
+                    );
                     result
                 }
                 Err(live_error) => {
@@ -1510,7 +1542,7 @@ mod windows_impl {
                     );
                     result
                 }
-            }
+            },
         };
         log_info(&format!(
             "Synced account stats Monster Kills: {} ({})",
@@ -1537,7 +1569,10 @@ mod windows_impl {
         let baseline_kills = [
             current_kills,
             stash.as_ref().map(|result| result.total_kills).unwrap_or(0),
-            direct.as_ref().map(|result| result.total_kills).unwrap_or(0),
+            direct
+                .as_ref()
+                .map(|result| result.total_kills)
+                .unwrap_or(0),
         ]
         .into_iter()
         .max()
@@ -1567,7 +1602,10 @@ mod windows_impl {
             return Err("No pd2_shared.stash file was found.".to_string());
         };
         if !path.is_file() {
-            return Err(format!("Selected shared stash file does not exist: {}", path.display()));
+            return Err(format!(
+                "Selected shared stash file does not exist: {}",
+                path.display()
+            ));
         }
 
         let previous = read_accountstats_stash(Some(path.to_string_lossy().to_string()))?;
@@ -1575,7 +1613,8 @@ mod windows_impl {
             .map_err(|e| format!("Failed to read shared stash {}: {}", path.display(), e))?;
         if bytes.len() < STASH_ITEM_SECTION_OFFSET + 2
             || bytes.get(0..4) != Some(&[0x55, 0xbb, 0x55, 0xbb])
-            || bytes.get(STASH_ITEM_SECTION_OFFSET..STASH_ITEM_SECTION_OFFSET + 2) != Some(&[b'J', b'M'])
+            || bytes.get(STASH_ITEM_SECTION_OFFSET..STASH_ITEM_SECTION_OFFSET + 2)
+                != Some(&[b'J', b'M'])
         {
             return Err(format!(
                 "Shared stash did not look like the expected PD2 account stats file: {}",
@@ -1612,8 +1651,13 @@ mod windows_impl {
         write_u32_at(&mut bytes, STASH_CHECKSUM_OFFSET, checksum)?;
         validate_stash_checksum(&bytes)?;
 
-        fs::write(&path, &bytes)
-            .map_err(|e| format!("Failed to write reset shared stash {}: {}", path.display(), e))?;
+        fs::write(&path, &bytes).map_err(|e| {
+            format!(
+                "Failed to write reset shared stash {}: {}",
+                path.display(),
+                e
+            )
+        })?;
 
         Ok(AccountStatsResetResult {
             stash_path: path.display().to_string(),

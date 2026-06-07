@@ -78,6 +78,12 @@ import {
   type MaterialTrackerName,
   type MaterialTrackerVisibility,
 } from "../lib/material-tracker";
+import {
+  SOE_13_FATE_CARD_ITEMS,
+  SOE_13_FATE_CARD_TIERS,
+  fateCardInfo,
+  fateCardTierKey,
+} from "../lib/soe-13-items";
 
 /** Hotkey configuration interface */
 export interface HotkeyConfig {
@@ -114,16 +120,27 @@ export interface DropTrackerStateSnapshot {
   dropsTrackerRecentItems?: DropTrackerRecentItem[];
   runeTrackerCounts?: RuneTrackerCounts;
   materialTrackerCounts?: MaterialTrackerCounts;
+  fateCardCounts?: FateCardCounts;
+  fateCardDropCounts?: FateCardCounts;
   holyGrailFound?: HolyGrailFoundMap;
   achievementStats?: AchievementStats;
 }
 
 export type HolyGrailFoundMap = Record<string, HolyGrailFoundEntry>;
+export type FateCardCounts = Partial<Record<string, number>>;
+export type FateCardTrackerVisibility = Partial<Record<string, boolean>>;
 export type SaveExitAutomationDifficulty = "Normal" | "Nightmare" | "Hell";
 export interface HolyGrailBackupStatus {
   backupExists: boolean;
   backupPath: string;
   foundCount: number;
+  exportedAt: string | null;
+}
+
+export interface FateCardBackupStatus {
+  backupExists: boolean;
+  backupPath: string;
+  cardCount: number;
   exportedAt: string | null;
 }
 
@@ -291,6 +308,22 @@ export interface AppSettings {
   materialTrackerOverlayHeight: number;
   /** Items found in the Holy Grail checklist, keyed by normalized item/category. */
   holyGrailFound: HolyGrailFoundMap;
+  /** Known Fate Card counts keyed by canonical card name. */
+  fateCardCounts: FateCardCounts;
+  /** Live Fate Card drop counts keyed by canonical card name. */
+  fateCardDropCounts: FateCardCounts;
+  /** When true, show the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayEnabled: boolean;
+  /** Per-card visibility for the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayCards: FateCardTrackerVisibility;
+  /** Per-tier visibility for the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayTiers: FateCardTrackerVisibility;
+  /** Saved position for the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayPosition: OverlayPosition;
+  /** Width in pixels for the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayWidth: number;
+  /** Height in pixels for the Fate Cards tracker overlay. */
+  fateCardTrackerOverlayHeight: number;
   /** When true, show the compact Grail Progress overlay. */
   holyGrailOverlayEnabled: boolean;
   /** When true, show total progress on the Grail Progress overlay. */
@@ -432,6 +465,7 @@ export const DEFAULT_MAIN_TAB_ORDER = [
   "sounds",
   "achievements",
   "holy-grail",
+  "fate-cards",
   "soe-wiki",
 ];
 
@@ -453,6 +487,39 @@ export const DEFAULT_HOLY_GRAIL_SUB_TAB_ORDER = [
   "notifications",
   "backup",
 ];
+
+function defaultFateCardTrackerCardVisibility(enabled = false): FateCardTrackerVisibility {
+  return Object.fromEntries(SOE_13_FATE_CARD_ITEMS.map((card) => [card, enabled]));
+}
+
+function defaultFateCardTrackerTierVisibility(enabled = true): FateCardTrackerVisibility {
+  return Object.fromEntries(
+    SOE_13_FATE_CARD_TIERS.map((tier) => [fateCardTierKey(tier), enabled]),
+  );
+}
+
+function normalizeFateCardTrackerCardVisibility(
+  value: Partial<Record<string, boolean>> | undefined | null,
+): FateCardTrackerVisibility {
+  const out = defaultFateCardTrackerCardVisibility(false);
+  for (const cardName of SOE_13_FATE_CARD_ITEMS) {
+    const card = fateCardInfo(cardName);
+    if (!card) continue;
+    out[card.name] = value?.[card.name] ?? value?.[cardName] ?? false;
+  }
+  return out;
+}
+
+function normalizeFateCardTrackerTierVisibility(
+  value: Partial<Record<string, boolean>> | undefined | null,
+): FateCardTrackerVisibility {
+  const out = defaultFateCardTrackerTierVisibility(true);
+  for (const tier of SOE_13_FATE_CARD_TIERS) {
+    const key = fateCardTierKey(tier);
+    out[key] = value?.[key] ?? true;
+  }
+  return out;
+}
 
 function defaultSounds(): SoundSlot[] {
   return Array.from({ length: 7 }, (_, i) => ({
@@ -536,6 +603,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   materialTrackerOverlayWidth: 238,
   materialTrackerOverlayHeight: 420,
   holyGrailFound: {},
+  fateCardCounts: {},
+  fateCardDropCounts: {},
+  fateCardTrackerOverlayEnabled: false,
+  fateCardTrackerOverlayCards: defaultFateCardTrackerCardVisibility(false),
+  fateCardTrackerOverlayTiers: defaultFateCardTrackerTierVisibility(true),
+  fateCardTrackerOverlayPosition: { x: 260, y: 612 },
+  fateCardTrackerOverlayWidth: 238,
+  fateCardTrackerOverlayHeight: 180,
   holyGrailOverlayEnabled: false,
   holyGrailOverlayShowTotal: true,
   holyGrailOverlayShowLatest: true,
@@ -743,7 +818,17 @@ class SettingsStore {
         continue;
       if (this.isPlaceholderItemName(entry.name)) continue;
       const category = entry.category as HolyGrailCategoryKey;
-      const validCategories = ["su", "ssu", "sets", "runes", "runewords"];
+      const validCategories = [
+        "su",
+        "ssu",
+        "sets",
+        "runes",
+        "runewords",
+        "fateCards",
+        "hatredOrbs",
+        "essences",
+        "ascendancy",
+      ];
       if (!validCategories.includes(category)) continue;
       const canonicalItem =
         category === "runewords" || category === "runes"
@@ -771,6 +856,60 @@ class SettingsStore {
       };
     }
     return out;
+  }
+
+  private normalizeFateCardCounts(
+    value: Partial<Record<string, number>> | undefined | null,
+  ): FateCardCounts {
+    const out: FateCardCounts = {};
+    for (const cardName of SOE_13_FATE_CARD_ITEMS) {
+      const card = fateCardInfo(cardName);
+      if (!card) continue;
+      const raw = value?.[card.name] ?? value?.[cardName];
+      if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+        out[card.name] = Math.floor(raw);
+      }
+    }
+    return out;
+  }
+
+  private withCompletedFateCardStacks(
+    found: HolyGrailFoundMap,
+    counts: FateCardCounts,
+  ): HolyGrailFoundMap {
+    let next: HolyGrailFoundMap | null = null;
+    for (const cardName of SOE_13_FATE_CARD_ITEMS) {
+      const card = fateCardInfo(cardName);
+      const grailItem = card ? canonicalHolyGrailItem("fateCards", card.name) : null;
+      if (!card || !grailItem) continue;
+      const count = counts[card.name] ?? 0;
+      if (count < card.amountRequired || found[grailItem.key]) continue;
+      next = next ?? { ...found };
+      next[grailItem.key] = {
+        key: grailItem.key,
+        name: grailItem.name,
+        category: grailItem.category,
+        firstFoundAt: new Date().toISOString(),
+      };
+    }
+    return next ?? found;
+  }
+
+  private pruneIncompleteFateCardStacks(
+    found: HolyGrailFoundMap,
+    counts: FateCardCounts,
+  ): HolyGrailFoundMap {
+    let next: HolyGrailFoundMap | null = null;
+    for (const [key, entry] of Object.entries(found)) {
+      if (entry.category !== "fateCards") continue;
+      const card = fateCardInfo(entry.name);
+      if (!card) continue;
+      const count = counts[card.name] ?? 0;
+      if (count >= card.amountRequired) continue;
+      next = next ?? { ...found };
+      delete next[key];
+    }
+    return next ?? found;
   }
 
   private normalizeGsfCategory(value: unknown): GsfItemCategory {
@@ -881,6 +1020,16 @@ class SettingsStore {
     options: { resetTimerBaseline?: boolean } = {},
   ): AppSettings {
     const resetTimerBaseline = options.resetTimerBaseline ?? false;
+    const fateCardCounts = this.normalizeFateCardCounts(
+      (settings as Partial<AppSettings>).fateCardCounts,
+    );
+    const fateCardDropCounts = this.normalizeFateCardCounts(
+      (settings as Partial<AppSettings>).fateCardDropCounts,
+    );
+    const holyGrailFound = this.pruneIncompleteFateCardStacks(
+      this.normalizeHolyGrailFound(settings.holyGrailFound),
+      fateCardCounts,
+    );
     return {
       ...settings,
       theme: this.normalizeTheme(settings.theme),
@@ -1057,7 +1206,30 @@ class SettingsStore {
         settings.materialTrackerOverlayHeight,
         DEFAULT_SETTINGS.materialTrackerOverlayHeight,
       ),
-      holyGrailFound: this.normalizeHolyGrailFound(settings.holyGrailFound),
+      holyGrailFound,
+      fateCardCounts,
+      fateCardDropCounts,
+      fateCardTrackerOverlayEnabled:
+        settings.fateCardTrackerOverlayEnabled ??
+        DEFAULT_SETTINGS.fateCardTrackerOverlayEnabled,
+      fateCardTrackerOverlayCards: normalizeFateCardTrackerCardVisibility(
+        settings.fateCardTrackerOverlayCards,
+      ),
+      fateCardTrackerOverlayTiers: normalizeFateCardTrackerTierVisibility(
+        settings.fateCardTrackerOverlayTiers,
+      ),
+      fateCardTrackerOverlayPosition: this.normalizeOverlayPosition(
+        settings.fateCardTrackerOverlayPosition,
+        DEFAULT_SETTINGS.fateCardTrackerOverlayPosition,
+      ),
+      fateCardTrackerOverlayWidth: this.normalizeOverlayWidth(
+        settings.fateCardTrackerOverlayWidth,
+        DEFAULT_SETTINGS.fateCardTrackerOverlayWidth,
+      ),
+      fateCardTrackerOverlayHeight: this.normalizeOverlayHeight(
+        settings.fateCardTrackerOverlayHeight,
+        DEFAULT_SETTINGS.fateCardTrackerOverlayHeight,
+      ),
       holyGrailOverlayEnabled:
         settings.holyGrailOverlayEnabled ??
         DEFAULT_SETTINGS.holyGrailOverlayEnabled,
@@ -1740,6 +1912,30 @@ class SettingsStore {
     );
   }
 
+  setFateCardTrackerOverlayPosition(position: OverlayPosition): void {
+    this.set(
+      "fateCardTrackerOverlayPosition",
+      this.normalizeOverlayPosition(
+        position,
+        DEFAULT_SETTINGS.fateCardTrackerOverlayPosition,
+      ),
+    );
+  }
+
+  setFateCardTrackerOverlayWidth(width: number): void {
+    this.set(
+      "fateCardTrackerOverlayWidth",
+      this.normalizeOverlayWidth(width, DEFAULT_SETTINGS.fateCardTrackerOverlayWidth),
+    );
+  }
+
+  setFateCardTrackerOverlayHeight(height: number): void {
+    this.set(
+      "fateCardTrackerOverlayHeight",
+      this.normalizeOverlayHeight(height, DEFAULT_SETTINGS.fateCardTrackerOverlayHeight),
+    );
+  }
+
   setAchievementProgressOverlayPosition(position: OverlayPosition): void {
     this.set(
       "achievementProgressOverlayPosition",
@@ -1852,6 +2048,10 @@ class SettingsStore {
     this.set("materialTrackerOverlayEnabled", enabled);
   }
 
+  setFateCardTrackerOverlayEnabled(enabled: boolean): void {
+    this.set("fateCardTrackerOverlayEnabled", enabled);
+  }
+
   setAchievementProgressOverlayEnabled(enabled: boolean): void {
     this.set("achievementProgressOverlayEnabled", enabled);
   }
@@ -1885,6 +2085,36 @@ class SettingsStore {
     this.set(
       "materialTrackerOverlayMaterials",
       Object.fromEntries(MATERIAL_TRACKER_NAMES.map((material) => [material, enabled])) as MaterialTrackerVisibility,
+    );
+  }
+
+  setFateCardTrackerOverlayCard(name: string, enabled: boolean): void {
+    const card = fateCardInfo(name);
+    if (!card) return;
+    this.set("fateCardTrackerOverlayCards", {
+      ...this._settings.fateCardTrackerOverlayCards,
+      [card.name]: enabled,
+    });
+  }
+
+  setAllFateCardTrackerOverlayCards(enabled: boolean): void {
+    this.set(
+      "fateCardTrackerOverlayCards",
+      defaultFateCardTrackerCardVisibility(enabled),
+    );
+  }
+
+  setFateCardTrackerOverlayTier(tier: number, enabled: boolean): void {
+    this.set("fateCardTrackerOverlayTiers", {
+      ...this._settings.fateCardTrackerOverlayTiers,
+      [fateCardTierKey(tier)]: enabled,
+    });
+  }
+
+  setAllFateCardTrackerOverlayTiers(enabled: boolean): void {
+    this.set(
+      "fateCardTrackerOverlayTiers",
+      defaultFateCardTrackerTierVisibility(enabled),
     );
   }
 
@@ -2136,9 +2366,42 @@ class SettingsStore {
     await invoke("open_holy_grail_backup_folder");
   }
 
+  async backupFateCards(): Promise<FateCardBackupStatus> {
+    return await invoke<FateCardBackupStatus>("backup_fate_card_counts", {
+      counts: this._settings.fateCardCounts,
+    });
+  }
+
+  async restoreFateCardsBackup(): Promise<number> {
+    const restored = await invoke<FateCardCounts>(
+      "restore_fate_card_counts_backup",
+    );
+    const normalized = this.normalizeFateCardCounts(restored);
+    const merged: FateCardCounts = { ...this._settings.fateCardCounts };
+    for (const [name, count] of Object.entries(normalized)) {
+      merged[name] = Math.max(merged[name] ?? 0, count ?? 0);
+    }
+    const saved = this.normalizeFateCardCounts(merged);
+    this.setFateCardCounts(saved);
+    return Object.values(saved).reduce<number>((sum, count) => sum + (count ?? 0), 0);
+  }
+
+  async getFateCardBackupStatus(): Promise<FateCardBackupStatus> {
+    return await invoke<FateCardBackupStatus>(
+      "get_fate_card_backup_status",
+    );
+  }
+
+  async openFateCardBackupFolder(): Promise<void> {
+    await invoke("open_fate_card_backup_folder");
+  }
+
   recordHolyGrailDrop(item: HolyGrailItemLike): boolean {
     const grailItem = holyGrailItemFromDrop(item);
     if (!grailItem) return false;
+    if (grailItem.category === "fateCards") {
+      return false;
+    }
     if (this._settings.holyGrailFound[grailItem.key]) return false;
     const next = {
       ...this._settings.holyGrailFound,
@@ -2169,6 +2432,19 @@ class SettingsStore {
     category: HolyGrailCategoryKey,
     found: boolean,
   ): void {
+    if (category === "fateCards") {
+      const card = fateCardInfo(name);
+      if (card) {
+        this.setFateCardCount(card.name, found ? card.amountRequired : 0, { updateGrail: found });
+        if (!found) {
+          const nextFound = { ...this._settings.holyGrailFound };
+          delete nextFound[key];
+          this.set("holyGrailFound", nextFound);
+          void this.backupHolyGrailFoundNow(nextFound);
+        }
+        return;
+      }
+    }
     const next = { ...this._settings.holyGrailFound };
     if (found) {
       next[key] = next[key] ?? {
@@ -2185,7 +2461,88 @@ class SettingsStore {
   }
 
   resetHolyGrail(): void {
-    this.set("holyGrailFound", {});
+    this.update({
+      holyGrailFound: {},
+      fateCardCounts: {},
+    });
+  }
+
+  private completedFateCardFoundEntry(name: string): HolyGrailFoundEntry | null {
+    const card = fateCardInfo(name);
+    const grailItem = card ? canonicalHolyGrailItem("fateCards", card.name) : null;
+    if (!card || !grailItem) return null;
+    return {
+      key: grailItem.key,
+      name: grailItem.name,
+      category: grailItem.category,
+      firstFoundAt: new Date().toISOString(),
+    };
+  }
+
+  setFateCardCounts(counts: FateCardCounts): void {
+    const normalizedCounts = this.normalizeFateCardCounts(counts);
+    const nextFound = this.withCompletedFateCardStacks(
+      this.pruneIncompleteFateCardStacks(this._settings.holyGrailFound, normalizedCounts),
+      normalizedCounts,
+    );
+    const foundChanged = nextFound !== this._settings.holyGrailFound;
+    this.update({
+      fateCardCounts: normalizedCounts,
+      holyGrailFound: nextFound,
+    });
+    if (foundChanged) {
+      void this.backupHolyGrailFoundNow(nextFound);
+    }
+  }
+
+  setFateCardCount(
+    name: string,
+    count: number,
+    options: { updateGrail?: boolean } = {},
+  ): void {
+    const card = fateCardInfo(name);
+    if (!card) return;
+    const nextCounts = this.normalizeFateCardCounts({
+      ...this._settings.fateCardCounts,
+      [card.name]: Math.max(0, Math.floor(count || 0)),
+    });
+    let nextFound = this._settings.holyGrailFound;
+    if (options.updateGrail !== false && (nextCounts[card.name] ?? 0) >= card.amountRequired) {
+      const entry = this.completedFateCardFoundEntry(card.name);
+      if (entry && !nextFound[entry.key]) {
+        nextFound = {
+          ...nextFound,
+          [entry.key]: entry,
+        };
+      }
+    }
+    const foundChanged = nextFound !== this._settings.holyGrailFound;
+    this.update({
+      fateCardCounts: nextCounts,
+      holyGrailFound: nextFound,
+    });
+    if (foundChanged) {
+      void this.backupHolyGrailFoundNow(nextFound);
+    }
+  }
+
+  recordFateCardDrop(name: string): void {
+    const card = fateCardInfo(name);
+    if (!card) return;
+    const nextAchievementStats = normalizeAchievementStats({
+      ...this._settings.achievementStats,
+      fateCardsFound: (this._settings.achievementStats.fateCardsFound ?? 0) + 1,
+      tier0FateCardsFound:
+        (this._settings.achievementStats.tier0FateCardsFound ?? 0) + (card.tier === 0 ? 1 : 0),
+    });
+    const nextDropCounts = this.normalizeFateCardCounts({
+      ...this._settings.fateCardDropCounts,
+      [card.name]: (this._settings.fateCardDropCounts[card.name] ?? 0) + 1,
+    });
+    this.update({
+      achievementStats: nextAchievementStats,
+      fateCardDropCounts: nextDropCounts,
+    });
   }
 
   resetDropTrackerOverlayPositions(): void {
@@ -2204,6 +2561,9 @@ class SettingsStore {
       },
       materialTrackerOverlayPosition: {
         ...DEFAULT_SETTINGS.materialTrackerOverlayPosition,
+      },
+      fateCardTrackerOverlayPosition: {
+        ...DEFAULT_SETTINGS.fateCardTrackerOverlayPosition,
       },
       achievementProgressOverlayPosition: {
         ...DEFAULT_SETTINGS.achievementProgressOverlayPosition,
@@ -2227,6 +2587,8 @@ class SettingsStore {
       runeTrackerOverlayHeight: DEFAULT_SETTINGS.runeTrackerOverlayHeight,
       materialTrackerOverlayWidth: DEFAULT_SETTINGS.materialTrackerOverlayWidth,
       materialTrackerOverlayHeight: DEFAULT_SETTINGS.materialTrackerOverlayHeight,
+      fateCardTrackerOverlayWidth: DEFAULT_SETTINGS.fateCardTrackerOverlayWidth,
+      fateCardTrackerOverlayHeight: DEFAULT_SETTINGS.fateCardTrackerOverlayHeight,
       achievementProgressOverlayWidth: DEFAULT_SETTINGS.achievementProgressOverlayWidth,
       achievementProgressOverlayHeight: DEFAULT_SETTINGS.achievementProgressOverlayHeight,
       achievementPopupOverlayWidth: DEFAULT_SETTINGS.achievementPopupOverlayWidth,
@@ -2527,8 +2889,11 @@ class SettingsStore {
       ...(snapshot.materialTrackerCounts
         ? { materialTrackerCounts: normalizeMaterialTrackerCounts(snapshot.materialTrackerCounts) }
         : {}),
-      ...(snapshot.holyGrailFound
-        ? { holyGrailFound: this.normalizeHolyGrailFound(snapshot.holyGrailFound) }
+      ...(snapshot.fateCardCounts
+        ? { fateCardCounts: this.normalizeFateCardCounts(snapshot.fateCardCounts) }
+        : {}),
+      ...(snapshot.fateCardDropCounts
+        ? { fateCardDropCounts: this.normalizeFateCardCounts(snapshot.fateCardDropCounts) }
         : {}),
       ...(snapshot.achievementStats
         ? { achievementStats: normalizeAchievementStats(snapshot.achievementStats) }
@@ -2683,6 +3048,17 @@ class SettingsStore {
       },
     });
     return materialName;
+  }
+
+  recordAchievementFateCardDrop(name: string): string | null {
+    const card = fateCardInfo(name);
+    if (!card) return null;
+    this.updateAchievementStats({
+      fateCardsFound: (this._settings.achievementStats.fateCardsFound ?? 0) + 1,
+      tier0FateCardsFound:
+        (this._settings.achievementStats.tier0FateCardsFound ?? 0) + (card.tier === 0 ? 1 : 0),
+    });
+    return card.name;
   }
 
   evaluateAchievementUnlocks(ctx: Omit<AchievementContext, "stats">): AchievementUnlockEntry[] {

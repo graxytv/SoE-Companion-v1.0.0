@@ -1,6 +1,7 @@
 import uniquesJson from "./data/soe-uniques.json";
 import type { HolyGrailItem } from "./holy-grail";
 import { holyGrailCategoryLabel, normalizeHolyGrailKey } from "./holy-grail";
+import { fateCardInfo } from "./soe-13-items";
 import { SOE_RUNEWORDS } from "./runewords";
 
 interface WikiBase {
@@ -119,6 +120,22 @@ export function detailsForGrailItem(item: HolyGrailItem): GrailItemDetails {
         meta: [...baseMeta(unique), ...uniqueCombatMeta(unique)],
         properties: (unique.displayProperties ?? []).map(cleanWikiText).filter(Boolean),
         note: valueText(unique.dropSource) ? `Drop source: ${valueText(unique.dropSource)}` : undefined,
+      };
+    }
+  }
+
+  if (item.category === "fateCards") {
+    const card = fateCardInfo(item.name);
+    if (card) {
+      return {
+        title: card.name,
+        subtitle: `Fate Card - Tier ${card.tier}`,
+        meta: [
+          { label: "Card Tier", value: String(card.tier) },
+          { label: "Cards Needed", value: String(card.amountRequired) },
+          { label: "Drop Location", value: card.dropLocation },
+        ],
+        properties: [`Full stack reward: ${card.reward}`],
       };
     }
   }

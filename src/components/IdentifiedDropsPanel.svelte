@@ -172,6 +172,11 @@
     </div>
   </div>
 
+  <p class="identified-warning">
+    <strong>Close Diablo II first.</strong>
+    The game must be closed before installing the hook or changing any Identified Drops settings. Changes take effect the next time Diablo II starts.
+  </p>
+
   <div class="project-d2-picker">
     <label class="project-d2-field">
       <span>ProjectD2 Folder</span>
@@ -263,6 +268,21 @@
     gap: var(--space-2);
     flex-wrap: wrap;
     justify-content: flex-end;
+  }
+
+  .identified-warning {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 55%, var(--border-primary));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent-primary) 10%, var(--bg-secondary));
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .identified-warning strong {
+    color: var(--accent-primary);
   }
 
   .project-d2-picker {

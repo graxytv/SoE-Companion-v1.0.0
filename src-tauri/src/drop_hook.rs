@@ -63,7 +63,9 @@ fn normalize_project_d2_dir(project_d2_dir: Option<String>) -> PathBuf {
     project_d2_dir
         .map(|path| PathBuf::from(path.trim_matches('"').trim()))
         .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| auto_detect_project_d2_dir().unwrap_or_else(|| PathBuf::from(PROJECT_D2_DIR)))
+        .unwrap_or_else(|| {
+            auto_detect_project_d2_dir().unwrap_or_else(|| PathBuf::from(PROJECT_D2_DIR))
+        })
 }
 
 fn dll_path(project_d2_dir: &Path) -> PathBuf {
@@ -98,10 +100,18 @@ fn auto_detect_project_d2_dir() -> Option<PathBuf> {
     ];
 
     if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
-        candidates.push(PathBuf::from(program_files_x86).join("Diablo II").join("ProjectD2"));
+        candidates.push(
+            PathBuf::from(program_files_x86)
+                .join("Diablo II")
+                .join("ProjectD2"),
+        );
     }
     if let Ok(program_files) = std::env::var("ProgramFiles") {
-        candidates.push(PathBuf::from(program_files).join("Diablo II").join("ProjectD2"));
+        candidates.push(
+            PathBuf::from(program_files)
+                .join("Diablo II")
+                .join("ProjectD2"),
+        );
     }
 
     candidates.into_iter().find(|path| is_project_d2_dir(path))
@@ -116,7 +126,11 @@ fn parse_bool_value(value: &str) -> Option<bool> {
 }
 
 fn bool_ini(value: bool) -> &'static str {
-    if value { "1" } else { "0" }
+    if value {
+        "1"
+    } else {
+        "0"
+    }
 }
 
 fn config_from_ini(contents: &str) -> DropIdentifiedConfig {
@@ -307,7 +321,10 @@ pub fn get_drop_hook_status() -> DropHookStatus {
 pub fn get_drop_hook_status_for_path(project_d2_dir: Option<String>) -> DropHookStatus {
     let status = build_status(project_d2_dir.clone(), String::new());
     let message = if !status.project_d2_dir_exists {
-        format!("ProjectD2 folder was not found at {}.", status.project_d2_dir)
+        format!(
+            "ProjectD2 folder was not found at {}.",
+            status.project_d2_dir
+        )
     } else if status.installed {
         "Auto Grail Tracker is installed.".to_string()
     } else if status.dll_exists {
@@ -324,7 +341,9 @@ pub fn install_drop_hook() -> Result<DropHookStatus, String> {
 }
 
 #[tauri::command]
-pub fn install_drop_hook_for_path(project_d2_dir: Option<String>) -> Result<DropHookStatus, String> {
+pub fn install_drop_hook_for_path(
+    project_d2_dir: Option<String>,
+) -> Result<DropHookStatus, String> {
     let project_dir = normalize_project_d2_dir(project_d2_dir.clone());
     if !project_dir.exists() {
         return Err(format!(
@@ -376,7 +395,10 @@ pub fn install_drop_hook_for_path(project_d2_dir: Option<String>) -> Result<Drop
         })?;
     }
 
-    Ok(build_status(project_d2_dir, "Auto Grail Tracker installed.".to_string()))
+    Ok(build_status(
+        project_d2_dir,
+        "Auto Grail Tracker installed.".to_string(),
+    ))
 }
 
 #[tauri::command]
@@ -385,19 +407,23 @@ pub fn get_drop_identified_config() -> Result<DropIdentifiedConfig, String> {
 }
 
 #[tauri::command]
-pub fn get_drop_identified_config_for_path(project_d2_dir: Option<String>) -> Result<DropIdentifiedConfig, String> {
+pub fn get_drop_identified_config_for_path(
+    project_d2_dir: Option<String>,
+) -> Result<DropIdentifiedConfig, String> {
     let project_dir = normalize_project_d2_dir(project_d2_dir);
     let ini = ini_path(&project_dir);
     if !ini.exists() {
         return Ok(DropIdentifiedConfig::default());
     }
-    let contents = fs::read_to_string(&ini)
-        .map_err(|e| format!("Failed to read {}: {}", ini.display(), e))?;
+    let contents =
+        fs::read_to_string(&ini).map_err(|e| format!("Failed to read {}: {}", ini.display(), e))?;
     Ok(config_from_ini(&contents))
 }
 
 #[tauri::command]
-pub fn write_drop_identified_config(config: DropIdentifiedConfig) -> Result<DropIdentifiedConfig, String> {
+pub fn write_drop_identified_config(
+    config: DropIdentifiedConfig,
+) -> Result<DropIdentifiedConfig, String> {
     write_drop_identified_config_for_path(config, None)
 }
 
@@ -416,8 +442,7 @@ pub fn write_drop_identified_config_for_path(
 
     let ini = ini_path(&project_dir);
     let contents = if ini.exists() {
-        fs::read_to_string(&ini)
-            .map_err(|e| format!("Failed to read {}: {}", ini.display(), e))?
+        fs::read_to_string(&ini).map_err(|e| format!("Failed to read {}: {}", ini.display(), e))?
     } else {
         BUNDLED_INI.to_string()
     };

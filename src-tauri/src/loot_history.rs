@@ -5,8 +5,8 @@
 //! ever pushed via the scanner path, but the data structures must exist
 //! so the rest of the codebase compiles unchanged.
 
-use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Current time in milliseconds since UNIX epoch.
 pub fn now_ms() -> u64 {
@@ -57,11 +57,17 @@ impl LootHistory {
         Self::default()
     }
 
-    /// Push a new entry. Returns `Duplicate` if an entry with the same key
-    /// (seed if non-zero, otherwise unit_id) already exists.
+    /// Push a new entry. Returns `Duplicate` only when an item with the same
+    /// key is still pending on the ground. Picked-up/lost entries should not
+    /// suppress later drops that reuse a seed, which can happen with stackable
+    /// SoE items.
     pub fn push(&mut self, entry: LootEntry) -> PushOutcome {
         let key = Self::key(&entry);
-        if self.entries.iter().any(|e| Self::key(e) == key) {
+        if self
+            .entries
+            .iter()
+            .any(|e| Self::key(e) == key && e.pickup == PickupState::Pending)
+        {
             return PushOutcome::Duplicate;
         }
         self.entries.push(entry);
@@ -70,13 +76,18 @@ impl LootHistory {
 
     /// Returns true if any entry is still in the `Pending` state.
     pub fn has_pending(&self) -> bool {
-        self.entries.iter().any(|e| e.pickup == PickupState::Pending)
+        self.entries
+            .iter()
+            .any(|e| e.pickup == PickupState::Pending)
     }
 
     /// Marks entries whose `unit_id` appears in `ids` as `PickedUp`.
     /// Returns a list of `(unit_id, seed, new_state)` tuples for the
     /// caller to emit as pickup-update events.
-    pub fn resolve_pending(&mut self, ids: &std::collections::HashSet<u32>) -> Vec<(u32, u32, PickupState)> {
+    pub fn resolve_pending(
+        &mut self,
+        ids: &std::collections::HashSet<u32>,
+    ) -> Vec<(u32, u32, PickupState)> {
         let mut resolved = Vec::new();
         for entry in &mut self.entries {
             if entry.pickup == PickupState::Pending && ids.contains(&entry.unit_id) {
@@ -111,6 +122,68 @@ impl LootHistory {
     }
 
     fn key(e: &LootEntry) -> u32 {
-        if e.seed != 0 { e.seed } else { e.unit_id }
+        if e.seed != 0 {
+            e.seed
+        } else {
+            e.unit_id
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(seed: u32, unit_id: u32, pickup: PickupState) -> LootEntry {
+        LootEntry {
+            unit_id,
+            seed,
+            timestamp_ms: 0,
+            name: "A Fate Worse Than Death".to_string(),
+            quality: "Normal".to_string(),
+            color: None,
+            pickup,
+            unique_kind: None,
+            is_relic: false,
+        }
+    }
+
+    #[test]
+    fn pending_entry_blocks_same_key() {
+        let mut history = LootHistory::new();
+        assert_eq!(
+            history.push(entry(123, 1, PickupState::Pending)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(
+            history.push(entry(123, 2, PickupState::Pending)),
+            PushOutcome::Duplicate
+        );
+    }
+
+    #[test]
+    fn picked_up_entry_does_not_block_same_key() {
+        let mut history = LootHistory::new();
+        assert_eq!(
+            history.push(entry(123, 1, PickupState::PickedUp)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(
+            history.push(entry(123, 2, PickupState::Pending)),
+            PushOutcome::Inserted
+        );
+    }
+
+    #[test]
+    fn lost_entry_does_not_block_same_key() {
+        let mut history = LootHistory::new();
+        assert_eq!(
+            history.push(entry(123, 1, PickupState::Lost)),
+            PushOutcome::Inserted
+        );
+        assert_eq!(
+            history.push(entry(123, 2, PickupState::Pending)),
+            PushOutcome::Inserted
+        );
     }
 }

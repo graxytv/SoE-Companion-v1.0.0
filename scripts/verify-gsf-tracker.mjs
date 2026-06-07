@@ -46,7 +46,7 @@ assert.match(
 const overlaySource = readFileSync(resolve("src/views/OverlayWindow.svelte"), "utf8");
 assert.match(
   overlaySource,
-  /const gsfMatches = gsfMatchesForDrop\(event\.payload\);\s*const gsfNeededBy = gsfNotificationEnabled \? summarizeGsfNeededBy\(gsfMatches\) : \[\];/s,
+  /const gsfMatches = gsfMatchesForDrop\(item\);\s*const gsfNeededBy = gsfNotificationEnabled \? summarizeGsfNeededBy\(gsfMatches\) : \[\];/s,
   "GSF matches should be computed independently from notification text visibility",
 );
 assert.match(

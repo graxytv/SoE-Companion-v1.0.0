@@ -1,6 +1,6 @@
 {
   "productName": "SoECompanion",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.soecompanion.app",
   "build": {
     "beforeDevCommand": "corepack pnpm dev",
@@ -125,6 +125,19 @@
         "title": "SoE Companion Rune Overlay",
         "width": 280,
         "height": 560,
+        "resizable": false,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false
+      },
+      {
+        "label": "fate-cards-card-overlay",
+        "title": "SoE Companion Fate Cards Overlay",
+        "width": 238,
+        "height": 180,
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

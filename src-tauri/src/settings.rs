@@ -17,6 +17,8 @@ use crate::logger::{error as log_error, info as log_info};
 const SETTINGS_FILE: &str = "settings.json";
 const HOLY_GRAIL_BACKUP_FILE: &str = "holy-grail-backup.json";
 const HOLY_GRAIL_BACKUP_DIR: &str = "holy-grail-backups";
+const FATE_CARD_BACKUP_FILE: &str = "fate-card-counts-backup.json";
+const FATE_CARD_BACKUP_DIR: &str = "fate-card-counts-backups";
 const ACHIEVEMENT_BACKUP_FILE: &str = "achievements-backup.json";
 const ACHIEVEMENT_BACKUP_DIR: &str = "achievement-backups";
 static SETTINGS_SAVE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -108,6 +110,24 @@ pub struct HolyGrailBackupStatus {
     pub backup_exists: bool,
     pub backup_path: String,
     pub found_count: usize,
+    pub exported_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FateCardBackup {
+    pub version: u32,
+    pub exported_at: String,
+    #[serde(default)]
+    pub counts: HashMap<String, u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FateCardBackupStatus {
+    pub backup_exists: bool,
+    pub backup_path: String,
+    pub card_count: usize,
     pub exported_at: Option<String>,
 }
 
@@ -394,6 +414,14 @@ pub struct AppSettings {
     /// Items found in the Holy Grail checklist.
     #[serde(default)]
     pub holy_grail_found: HashMap<String, HolyGrailFoundEntry>,
+
+    /// Known Fate Card counts keyed by canonical card name.
+    #[serde(default)]
+    pub fate_card_counts: HashMap<String, u32>,
+
+    /// Live Fate Card drop counts keyed by canonical card name.
+    #[serde(default)]
+    pub fate_card_drop_counts: HashMap<String, u32>,
 
     /// When true, show the compact Grail Progress overlay.
     #[serde(default)]
@@ -752,9 +780,9 @@ const DROP_TRACKER_CATEGORY_KEYS: &[&str] = &[
 ];
 
 const RUNE_NAMES: &[&str] = &[
-    "El", "Eld", "Tir", "Nef", "Eth", "Ith", "Tal", "Ral", "Ort", "Thul", "Amn",
-    "Sol", "Shael", "Dol", "Hel", "Io", "Lum", "Ko", "Fal", "Lem", "Pul", "Um",
-    "Mal", "Ist", "Gul", "Vex", "Ohm", "Lo", "Sur", "Ber", "Jah", "Cham", "Zod",
+    "El", "Eld", "Tir", "Nef", "Eth", "Ith", "Tal", "Ral", "Ort", "Thul", "Amn", "Sol", "Shael",
+    "Dol", "Hel", "Io", "Lum", "Ko", "Fal", "Lem", "Pul", "Um", "Mal", "Ist", "Gul", "Vex", "Ohm",
+    "Lo", "Sur", "Ber", "Jah", "Cham", "Zod",
 ];
 
 fn default_drops_tracker_categories() -> HashMap<String, bool> {
@@ -763,7 +791,7 @@ fn default_drops_tracker_categories() -> HashMap<String, bool> {
         .map(|key| {
             (
                 (*key).to_string(),
-                matches!(*key, "unique" | "hellforged" | "sets"),
+                matches!(*key, "unique" | "hellforged" | "sets" | "fateCard"),
             )
         })
         .collect()
@@ -850,6 +878,8 @@ impl Default for AppSettings {
             rune_tracker_overlay_position: default_rune_tracker_overlay_position(),
             rune_tracker_overlay_width: default_tracker_overlay_width(),
             holy_grail_found: HashMap::new(),
+            fate_card_counts: HashMap::new(),
+            fate_card_drop_counts: HashMap::new(),
             holy_grail_overlay_enabled: false,
             holy_grail_overlay_show_total: true,
             holy_grail_overlay_show_latest: true,
@@ -862,8 +892,8 @@ impl Default for AppSettings {
             save_exit_automation_click_y: default_save_exit_automation_click_y(),
             save_exit_automation_coordinate_mode_percent: false,
             save_exit_automation_delay_ms: default_save_exit_automation_delay_ms(),
-            save_exit_automation_main_menu_wait_ms:
-                default_save_exit_automation_main_menu_wait_ms(),
+            save_exit_automation_main_menu_wait_ms: default_save_exit_automation_main_menu_wait_ms(
+            ),
             gsf_enabled: true,
             gsf_notification_enabled: true,
             gsf_sound_slot: None,
@@ -908,6 +938,17 @@ fn holy_grail_backup_path(app: &AppHandle) -> Result<PathBuf, String> {
 fn holy_grail_snapshot_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app_data_dir(app)?.join(HOLY_GRAIL_BACKUP_DIR);
     fs::create_dir_all(&dir).map_err(|e| format!("Failed to create grail backup dir: {}", e))?;
+    Ok(dir)
+}
+
+fn fate_card_backup_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join(FATE_CARD_BACKUP_FILE))
+}
+
+fn fate_card_snapshot_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join(FATE_CARD_BACKUP_DIR);
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create Fate Card backup dir: {}", e))?;
     Ok(dir)
 }
 
@@ -1056,6 +1097,85 @@ fn holy_grail_backup_status_inner(app: &AppHandle) -> Result<HolyGrailBackupStat
     })
 }
 
+fn load_fate_card_backup_from_disk(app: &AppHandle) -> Result<Option<FateCardBackup>, String> {
+    let path = fate_card_backup_path(app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let text =
+        fs::read_to_string(&path).map_err(|e| format!("Failed to read Fate Card backup: {}", e))?;
+    let backup: FateCardBackup = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse Fate Card backup: {}", e))?;
+    Ok(Some(backup))
+}
+
+fn write_fate_card_backup_to_disk(
+    app: &AppHandle,
+    counts: &HashMap<String, u32>,
+    write_snapshot: bool,
+) -> Result<FateCardBackupStatus, String> {
+    let path = fate_card_backup_path(app)?;
+    let backup = FateCardBackup {
+        version: 1,
+        exported_at: backup_exported_at(),
+        counts: counts.clone(),
+    };
+    let json = serde_json::to_string_pretty(&backup)
+        .map_err(|e| format!("Failed to serialize Fate Card backup: {}", e))?;
+    fs::write(&path, &json).map_err(|e| format!("Failed to write Fate Card backup: {}", e))?;
+
+    if write_snapshot && !counts.is_empty() {
+        let snapshot_dir = fate_card_snapshot_dir(app)?;
+        let snapshot_path = snapshot_dir.join(format!(
+            "fate-card-counts-backup-{}.json",
+            now_backup_stamp()
+        ));
+        let _ = fs::write(&snapshot_path, &json);
+
+        if let Ok(entries) = fs::read_dir(&snapshot_dir) {
+            let mut files: Vec<_> = entries
+                .flatten()
+                .filter(|entry| {
+                    entry.path().extension().and_then(|ext| ext.to_str()) == Some("json")
+                })
+                .collect();
+            files.sort_by_key(|entry| entry.metadata().and_then(|m| m.modified()).ok());
+            while files.len() > 20 {
+                if let Some(entry) = files.first() {
+                    let _ = fs::remove_file(entry.path());
+                }
+                files.remove(0);
+            }
+        }
+    }
+
+    Ok(FateCardBackupStatus {
+        backup_exists: true,
+        backup_path: path.to_string_lossy().to_string(),
+        card_count: counts.values().filter(|count| **count > 0).count(),
+        exported_at: Some(backup.exported_at),
+    })
+}
+
+fn fate_card_backup_status_inner(app: &AppHandle) -> Result<FateCardBackupStatus, String> {
+    let path = fate_card_backup_path(app)?;
+    if !path.exists() {
+        return Ok(FateCardBackupStatus {
+            backup_exists: false,
+            backup_path: path.to_string_lossy().to_string(),
+            card_count: 0,
+            exported_at: None,
+        });
+    }
+    let backup = load_fate_card_backup_from_disk(app)?.unwrap_or_default();
+    Ok(FateCardBackupStatus {
+        backup_exists: true,
+        backup_path: path.to_string_lossy().to_string(),
+        card_count: backup.counts.values().filter(|count| **count > 0).count(),
+        exported_at: Some(backup.exported_at),
+    })
+}
+
 fn load_achievement_backup_from_disk(app: &AppHandle) -> Result<Option<AchievementBackup>, String> {
     let path = achievement_backup_path(app)?;
     if !path.exists() {
@@ -1177,6 +1297,36 @@ pub fn open_holy_grail_backup_folder(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn backup_fate_card_counts(
+    app: AppHandle,
+    counts: HashMap<String, u32>,
+) -> Result<FateCardBackupStatus, String> {
+    write_fate_card_backup_to_disk(&app, &counts, true)
+}
+
+#[tauri::command]
+pub fn restore_fate_card_counts_backup(app: AppHandle) -> Result<HashMap<String, u32>, String> {
+    let backup = load_fate_card_backup_from_disk(&app)?
+        .ok_or_else(|| "No Fate Card backup file exists yet.".to_string())?;
+    Ok(backup.counts)
+}
+
+#[tauri::command]
+pub fn get_fate_card_backup_status(app: AppHandle) -> Result<FateCardBackupStatus, String> {
+    fate_card_backup_status_inner(&app)
+}
+
+#[tauri::command]
+pub fn open_fate_card_backup_folder(app: AppHandle) -> Result<(), String> {
+    let dir = app_data_dir(&app)?;
+    std::process::Command::new("explorer")
+        .arg(&dir)
+        .spawn()
+        .map_err(|e| format!("Failed to open Fate Card backup folder: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn backup_achievement_stats(
     app: AppHandle,
     stats: serde_json::Value,
@@ -1195,7 +1345,11 @@ pub fn backup_achievement_category(
         return Err("Achievement category name is required.".to_string());
     }
     let snapshot_dir = achievement_snapshot_dir(&app)?;
-    let path = snapshot_dir.join(format!("achievements-{}-{}.json", label, now_backup_stamp()));
+    let path = snapshot_dir.join(format!(
+        "achievements-{}-{}.json",
+        label,
+        now_backup_stamp()
+    ));
     let backup = serde_json::json!({
         "version": 1,
         "exportedAt": backup_exported_at(),
@@ -1247,10 +1401,13 @@ pub fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
 
     // Try to get settings from store, use defaults if not found
     let settings: AppSettings = match store.get("settings") {
-        Some(value) => serde_json::from_value(value.clone()).unwrap_or_else(|e| {
-            log_error(&format!("Failed to parse settings, using defaults: {}", e));
-            AppSettings::default()
-        }),
+        Some(value) => {
+            let migrated = migrate_settings_value(value.clone());
+            serde_json::from_value(migrated).unwrap_or_else(|e| {
+                log_error(&format!("Failed to parse settings, using defaults: {}", e));
+                AppSettings::default()
+            })
+        }
         None => {
             log_info("No settings found, using defaults");
             AppSettings::default()
@@ -1258,6 +1415,74 @@ pub fn load_settings(app: AppHandle) -> Result<AppSettings, String> {
     };
 
     Ok(settings)
+}
+
+fn migrate_settings_value(mut value: serde_json::Value) -> serde_json::Value {
+    let Some(settings) = value.as_object_mut() else {
+        return value;
+    };
+
+    let fate_card_tracking_migrated = settings
+        .get("fateCardDropsTrackerDefaultMigrated")
+        .and_then(|raw| raw.as_bool())
+        .unwrap_or(false);
+
+    if !fate_card_tracking_migrated {
+        if let Some(categories) = settings
+            .get_mut("dropsTrackerCategories")
+            .and_then(|raw| raw.as_object_mut())
+        {
+            categories.insert("fateCard".to_string(), serde_json::Value::Bool(true));
+        }
+        settings.insert(
+            "fateCardDropsTrackerDefaultMigrated".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+
+    let fate_card_stash_counts_paused = settings
+        .get("fateCardStashCounterMapPaused")
+        .and_then(|raw| raw.as_bool())
+        .unwrap_or(false);
+
+    if !fate_card_stash_counts_paused {
+        settings.insert("fateCardCounts".to_string(), serde_json::json!({}));
+        if let Some(found) = settings
+            .get_mut("holyGrailFound")
+            .and_then(|raw| raw.as_object_mut())
+        {
+            found.retain(|_, entry| {
+                entry.get("category").and_then(|raw| raw.as_str()) != Some("fateCards")
+            });
+        }
+        settings.insert(
+            "fateCardStashCounterMapPaused".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+
+    let fate_card_live_drop_counts_separated = settings
+        .get("fateCardLiveDropCountsSeparated")
+        .and_then(|raw| raw.as_bool())
+        .unwrap_or(false);
+
+    if !fate_card_live_drop_counts_separated {
+        settings.insert("fateCardCounts".to_string(), serde_json::json!({}));
+        if let Some(found) = settings
+            .get_mut("holyGrailFound")
+            .and_then(|raw| raw.as_object_mut())
+        {
+            found.retain(|_, entry| {
+                entry.get("category").and_then(|raw| raw.as_str()) != Some("fateCards")
+            });
+        }
+        settings.insert(
+            "fateCardLiveDropCountsSeparated".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+
+    value
 }
 
 fn merge_json_patch(base: &mut serde_json::Value, patch: serde_json::Value) {
