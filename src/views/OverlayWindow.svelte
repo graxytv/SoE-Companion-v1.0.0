@@ -861,8 +861,13 @@
 
   function isSoe13CurrencyMaterialNotificationDrop(item: ItemDrop): boolean {
     const code = dropItemCode(item);
+    const codeName = soe13ItemNameFromCode(code);
     if (/^fa\d{2}$/i.test(code)) return false;
-    if (soe13ItemNameFromCode(code) || isSoe13EssenceCode(code)) return true;
+    const isCindersoulCluster = [codeName, ...soe13DropNames(item)]
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
+      .some((name) => soe13ListContains(['Cindersoul Cluster'], name));
+    if (isCindersoulCluster) return false;
+    if (codeName || isSoe13EssenceCode(code)) return true;
     return (
       soe13ListMatchesDrop(SOE_13_GENERAL_MATERIAL_ITEMS, item) ||
       soe13ListMatchesDrop(SOE_13_HATRED_ORB_ITEMS, item) ||
@@ -1183,9 +1188,12 @@
         (holyGrailNewItemNotificationEnabled && isNewGrailItem) ||
         gsfNeededBy.length > 0 ||
         (unidentifiedUniqueSet && notifyUnidentifiedUniqueSetDrops);
+      const grailDisplayName = isNewGrailItem
+        ? (holyGrailItemFromDrop(item)?.name ?? trackedItemDisplayName(item))
+        : trackedItemDisplayName(item);
       const displayItem = {
         ...item,
-        name: trackedItemDisplayName(item),
+        name: grailDisplayName,
         is_new_grail: holyGrailNewItemNotificationEnabled && isNewGrailItem,
         gsf_needed_by: gsfNeededBy,
       };

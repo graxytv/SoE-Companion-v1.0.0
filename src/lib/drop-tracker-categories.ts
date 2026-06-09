@@ -7,44 +7,9 @@ import {
   soe13ItemNameFromCode,
   soe13ListContains,
 } from './soe-13-items';
+import { RUNE_NAMES, runeNameFromCode, runeNameFromText, type RuneName } from './runewords';
 
-export const RUNE_NAMES = [
-  "El",
-  "Eld",
-  "Tir",
-  "Nef",
-  "Eth",
-  "Ith",
-  "Tal",
-  "Ral",
-  "Ort",
-  "Thul",
-  "Amn",
-  "Sol",
-  "Shael",
-  "Dol",
-  "Hel",
-  "Io",
-  "Lum",
-  "Ko",
-  "Fal",
-  "Lem",
-  "Pul",
-  "Um",
-  "Mal",
-  "Ist",
-  "Gul",
-  "Vex",
-  "Ohm",
-  "Lo",
-  "Sur",
-  "Ber",
-  "Jah",
-  "Cham",
-  "Zod",
-] as const;
-
-export type RuneName = (typeof RUNE_NAMES)[number];
+export { RUNE_NAMES, type RuneName };
 export type RuneTrackerCounts = Partial<Record<RuneName, number>>;
 export type RuneTrackerVisibility = Record<RuneName, boolean>;
 
@@ -136,6 +101,9 @@ function cleanDropName(value: unknown): string {
 }
 
 export function runeNameFromDrop(item: DropTrackerItemLike): RuneName | null {
+  const byCode = runeNameFromCode(item.item_code || item.itemCode);
+  if (byCode) return byCode;
+
   const candidates = [
     item.canonical_name,
     item.canonicalName,
@@ -146,6 +114,9 @@ export function runeNameFromDrop(item: DropTrackerItemLike): RuneName | null {
   ];
 
   for (const candidate of candidates) {
+    const namedRune = runeNameFromText(cleanDropName(candidate));
+    if (namedRune) return namedRune;
+
     const cleaned = cleanRuneCandidate(candidate);
     if (!cleaned) continue;
     const exact = RUNE_NAMES.find((name) => name.toLowerCase() === cleaned.toLowerCase());

@@ -10,6 +10,22 @@ export const RUNE_NAMES = [
 export type RuneName = (typeof RUNE_NAMES)[number];
 export type RuneInventory = Record<RuneName, number>;
 
+export function runeNameFromCode(value: unknown): RuneName | null {
+  const match = /^r(\d{1,2})$/i.exec(String(value ?? "").trim());
+  if (!match) return null;
+  const index = Number.parseInt(match[1], 10) - 1;
+  return RUNE_NAMES[index] ?? null;
+}
+
+export function runeNameFromText(value: unknown): RuneName | null {
+  const lower = String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  if (!lower) return null;
+  return RUNE_NAMES.find((rune) => {
+    const normalized = rune.toLowerCase();
+    return lower === normalized || lower === `${normalized} rune`;
+  }) ?? null;
+}
+
 export interface SoeRuneword {
   key: string;
   name: string;

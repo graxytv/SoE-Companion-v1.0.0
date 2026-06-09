@@ -4,7 +4,7 @@ import {
   STATIC_HELLFORGED_UNIQUE_ITEMS,
   STATIC_UNIQUE_ITEMS,
 } from "./holy-grail-static";
-import { RUNE_NAMES, SOE_RUNEWORDS, type RuneName } from "./runewords";
+import { RUNE_NAMES, SOE_RUNEWORDS, runeNameFromCode, runeNameFromText, type RuneName } from "./runewords";
 import { uniqueQualityLevel } from "./unique-quality-levels";
 import {
   SOE_13_ASCENDANCY_ITEMS,
@@ -220,6 +220,11 @@ function codeOnlyGrailUnique(item: HolyGrailItemLike): HolyGrailItem | null {
   return name ? canonicalHolyGrailItem("su", name) : null;
 }
 
+function codeOnlyRune(item: HolyGrailItemLike): HolyGrailItem | null {
+  const name = runeNameFromCode(normalizedItemCode(item));
+  return name ? canonicalHolyGrailItem("runes", name) : null;
+}
+
 function codeOnlyFateCard(item: HolyGrailItemLike): HolyGrailItem | null {
   const match = /^fa(\d{1,2})$/i.exec(normalizedItemCode(item));
   if (!match) return null;
@@ -314,6 +319,10 @@ export function canonicalHolyGrailItem(
 
   const lookup = canonicalLookup();
   const normalizedName = normalizeHolyGrailKey(cleanName);
+  if (categoryKey === "runes") {
+    const rune = runeNameFromText(cleanName);
+    if (rune) return lookup.get(`runes:${normalizeHolyGrailKey(rune)}`) ?? null;
+  }
   return (
     lookup.get(`${categoryKey}:${normalizedName}`) ??
     canonicalItemInsideDecoratedName(categoryKey, rawName) ??
@@ -376,6 +385,7 @@ export function inferHolyGrailCategory(
   item: HolyGrailItemLike,
 ): HolyGrailCategoryKey | null {
   if (codeOnlyGrailUnique(item)) return "su";
+  if (codeOnlyRune(item)) return "runes";
   if (codeOnlyFateCard(item)) return "fateCards";
   if (item.is_runeword === true || item.isRuneword === true) return "runewords";
   const quality = (item.quality ?? "").toLowerCase();
@@ -409,6 +419,8 @@ export function holyGrailItemFromDrop(
 ): HolyGrailItem | null {
   const byCode = codeOnlyGrailUnique(item);
   if (byCode) return byCode;
+  const runeByCode = codeOnlyRune(item);
+  if (runeByCode) return runeByCode;
   const fateCardByCode = codeOnlyFateCard(item);
   if (fateCardByCode) return fateCardByCode;
   const soe13NameByCode = soe13ItemNameFromCode(normalizedItemCode(item));
