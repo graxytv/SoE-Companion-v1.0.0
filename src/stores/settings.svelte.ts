@@ -656,6 +656,7 @@ class SettingsStore {
   private _isLoaded = $state(false);
   private _isLoading = $state(false);
   private _saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _lastDropsTrackerTimerPersistAtMs = 0;
   /** Locally-modified-not-yet-saved keys; merged last so the overlay's drag
    *  doesn't get clobbered by the main window's stale save (and vice versa). */
   private _dirtyKeys = new Set<keyof AppSettings>();
@@ -1465,6 +1466,7 @@ class SettingsStore {
     }
 
     this._saveTimeout = setTimeout(async () => {
+      this._saveTimeout = null;
       const dirtyKeys = Array.from(this._dirtyKeys);
       if (dirtyKeys.length === 0) return;
       const patch: Partial<AppSettings> = {};
@@ -1507,6 +1509,19 @@ class SettingsStore {
     }
 
     // Auto-save after change
+    this.save();
+  }
+
+  /** Update reactive state without marking settings dirty. Used for live UI
+   *  counters that should not write to disk every tick. */
+  private updateVolatile(partial: Partial<AppSettings>): void {
+    this._settings = { ...this._settings, ...partial };
+  }
+
+  private persistDropsTrackerTimerSnapshot(): void {
+    this._dirtyKeys.add("dropsTrackerRunElapsedMs");
+    this._dirtyKeys.add("dropsTrackerSessionElapsedMs");
+    this._dirtyKeys.add("dropsTrackerTimerLastTickAtMs");
     this.save();
   }
 
@@ -1793,6 +1808,7 @@ class SettingsStore {
     if (enabled) {
       // Capture elapsed time up to the moment muling starts, then freeze.
       this.tickDropsTrackerTimers(now);
+      this.persistDropsTrackerTimerSnapshot();
       this.update({
         dropsTrackerMulingMode: true,
         dropsTrackerMulingStartedAtMs: now,
@@ -2664,7 +2680,10 @@ class SettingsStore {
     this._dropsTrackerTimersInGame = active;
     // Reset the tick baseline whenever gameplay pauses/resumes so lobby/menu
     // time is never backfilled into run/session timers.
-    this.set("dropsTrackerTimerLastTickAtMs", now);
+    this.updateVolatile({ dropsTrackerTimerLastTickAtMs: now });
+    if (!active) {
+      this.persistDropsTrackerTimerSnapshot();
+    }
   }
 
   setDropsTrackerTimersDisplayActive(active: boolean): void {
@@ -2724,15 +2743,18 @@ class SettingsStore {
     const deltaMs = Math.max(0, Math.min(now - safeLastTick, 60_000));
     if (deltaMs <= 0) return;
 
-    this.update({
-      dropsTrackerRunElapsedMs: this.normalizeElapsedMs(
-        this._settings.dropsTrackerRunElapsedMs,
-      ) + deltaMs,
-      dropsTrackerSessionElapsedMs: this.normalizeElapsedMs(
-        this._settings.dropsTrackerSessionElapsedMs,
-      ) + deltaMs,
+    this.updateVolatile({
+      dropsTrackerRunElapsedMs:
+        this.normalizeElapsedMs(this._settings.dropsTrackerRunElapsedMs) + deltaMs,
+      dropsTrackerSessionElapsedMs:
+        this.normalizeElapsedMs(this._settings.dropsTrackerSessionElapsedMs) + deltaMs,
       dropsTrackerTimerLastTickAtMs: now,
     });
+
+    if (now - this._lastDropsTrackerTimerPersistAtMs >= 60_000) {
+      this._lastDropsTrackerTimerPersistAtMs = now;
+      this.persistDropsTrackerTimerSnapshot();
+    }
   }
 
   resetDropsTrackerRunTimer(): void {

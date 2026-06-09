@@ -1546,7 +1546,11 @@ fn should_keep_existing_grail_entry(
     !existing_time.is_empty() && (incoming_time.is_empty() || existing_time <= incoming_time)
 }
 
-fn persist_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
+fn persist_settings_with_options(
+    app: &AppHandle,
+    settings: &AppSettings,
+    write_routine_backups: bool,
+) -> Result<(), String> {
     let store = app
         .store(SETTINGS_FILE)
         .map_err(|e| format!("Failed to open settings store: {}", e))?;
@@ -1562,14 +1566,16 @@ fn persist_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Strin
 
     // Never let routine saves of an empty/reset grail overwrite the safety backup.
     // Manual backups can still write the current state explicitly.
-    if !settings.holy_grail_found.is_empty() {
+    if write_routine_backups && !settings.holy_grail_found.is_empty() {
         if let Err(e) = write_holy_grail_backup_to_disk(app, &settings.holy_grail_found, false) {
             log_error(&format!("Failed to auto-backup Holy Grail data: {}", e));
         }
     }
 
-    if let Err(e) = write_achievement_backup_to_disk(app, &settings.achievement_stats, false) {
-        log_error(&format!("Failed to auto-backup achievement data: {}", e));
+    if write_routine_backups {
+        if let Err(e) = write_achievement_backup_to_disk(app, &settings.achievement_stats, false) {
+            log_error(&format!("Failed to auto-backup achievement data: {}", e));
+        }
     }
 
     if let Err(e) = app.emit("settings-updated", settings) {
@@ -1577,6 +1583,25 @@ fn persist_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), Strin
     }
 
     Ok(())
+}
+
+fn persist_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
+    persist_settings_with_options(app, settings, true)
+}
+
+fn is_timer_only_settings_patch(patch: &serde_json::Value) -> bool {
+    let Some(object) = patch.as_object() else {
+        return false;
+    };
+    !object.is_empty()
+        && object.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                "dropsTrackerRunElapsedMs"
+                    | "dropsTrackerSessionElapsedMs"
+                    | "dropsTrackerTimerLastTickAtMs"
+            )
+        })
 }
 
 /// Save application settings to the store
@@ -1602,13 +1627,14 @@ pub fn save_settings_patch(
     let _guard = SETTINGS_SAVE_LOCK
         .lock()
         .map_err(|_| "Settings save lock poisoned".to_string())?;
+    let timer_only_patch = is_timer_only_settings_patch(&patch);
     let current = load_settings(app.clone())?;
     let mut value = serde_json::to_value(current)
         .map_err(|e| format!("Failed to serialize current settings: {}", e))?;
     merge_json_patch(&mut value, patch);
     let settings: AppSettings = serde_json::from_value(value)
         .map_err(|e| format!("Failed to merge settings patch: {}", e))?;
-    persist_settings(&app, &settings)?;
+    persist_settings_with_options(&app, &settings, !timer_only_patch)?;
     Ok(settings)
 }
 

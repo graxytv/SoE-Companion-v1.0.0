@@ -1325,7 +1325,7 @@
         invoke('sync_overlay_with_game').catch(() => {
           // Silent: game might not be running or not focused
         });
-      }, 250);
+      }, 1000);
     }
 
     return () => {

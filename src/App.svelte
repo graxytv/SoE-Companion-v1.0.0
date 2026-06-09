@@ -24,6 +24,7 @@
   let windowType = $state<WindowType>(null);
   let isReady = $state(false);
   let overlayLayoutEditing = $state(false);
+  let overlayEditorWindowsHidden = false;
 
   function isUtilityOverlayWindow(): boolean {
     return windowType === 'muling-banner' ||
@@ -41,7 +42,9 @@
   function syncOverlayEditorWindows(): void {
     if (!windowType || isUtilityOverlayWindow()) return;
     if (overlayLayoutEditing) return;
+    if (overlayEditorWindowsHidden) return;
 
+    overlayEditorWindowsHidden = true;
     for (const label of OVERLAY_LAYOUT_WINDOW_LABELS) {
       invoke('set_overlay_editor_window_visible', {
         label,
@@ -118,6 +121,9 @@
 
     const unlistenEditMode = await listen<{ active: boolean }>('overlay-edit-mode', (event) => {
       overlayLayoutEditing = event.payload.active;
+      if (event.payload.active) {
+        overlayEditorWindowsHidden = false;
+      }
     });
 
     window.setInterval(() => {
@@ -126,7 +132,7 @@
         settingsStore.settings.mulingIndicatorOverlayEnabled,
       );
       syncOverlayEditorWindows();
-    }, 1000);
+    }, 5000);
 
     void unlistenEditMode;
   });
