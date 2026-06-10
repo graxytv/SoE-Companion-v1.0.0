@@ -139,7 +139,7 @@ export const MATERIAL_ALIASES: Record<string, readonly string[]> = {
   [normalizeHolyGrailKey('Glyph of Nemeses')]: ['Glyph of Nemesis'],
   [normalizeHolyGrailKey('Glyph of Adversaries')]: ['Glyph of Adverseries'],
   [normalizeHolyGrailKey('Larzuk Puzzlebox')]: ["Larzuk's Puzzlebox"],
-  [normalizeHolyGrailKey('Worldstone Shard')]: ['Worldstone Shards', 'WSS'],
+  [normalizeHolyGrailKey('Worldstone Shard')]: ['Worldstone Shards', 'WSS', 'wss'],
   [normalizeHolyGrailKey('Tainted Worldstone Shard')]: [
     'Tainted World Stone Shard',
     'Tainted Worldstone Shards',

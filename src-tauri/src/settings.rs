@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
@@ -22,6 +23,9 @@ const FATE_CARD_BACKUP_DIR: &str = "fate-card-counts-backups";
 const ACHIEVEMENT_BACKUP_FILE: &str = "achievements-backup.json";
 const ACHIEVEMENT_BACKUP_DIR: &str = "achievement-backups";
 static SETTINGS_SAVE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+static LAST_ROUTINE_BACKUP_WRITE: LazyLock<Mutex<Option<Instant>>> =
+    LazyLock::new(|| Mutex::new(None));
+const ROUTINE_BACKUP_MIN_INTERVAL: Duration = Duration::from_secs(30);
 
 /// One configurable drop-sound slot. Index in `AppSettings.sounds` + 1
 /// equals the DSL keyword index (e.g. element 0 -> `sound1`).
@@ -475,6 +479,11 @@ pub struct AppSettings {
     #[serde(default = "default_save_exit_automation_main_menu_wait_ms")]
     pub save_exit_automation_main_menu_wait_ms: u32,
 
+    /// When true, a lightweight watcher asks the frontend to sync after
+    /// Diablo II loading/zone transitions settle.
+    #[serde(default)]
+    pub zone_transition_sync_enabled: bool,
+
     /// When true, GSF matching and notifications are enabled.
     #[serde(default = "default_true")]
     pub gsf_enabled: bool,
@@ -898,6 +907,7 @@ impl Default for AppSettings {
             save_exit_automation_delay_ms: default_save_exit_automation_delay_ms(),
             save_exit_automation_main_menu_wait_ms: default_save_exit_automation_main_menu_wait_ms(
             ),
+            zone_transition_sync_enabled: true,
             gsf_enabled: true,
             gsf_notification_enabled: true,
             gsf_sound_slot: None,
@@ -1486,6 +1496,28 @@ fn migrate_settings_value(mut value: serde_json::Value) -> serde_json::Value {
         );
     }
 
+    let zone_transition_sync_defaulted = settings
+        .get("zoneTransitionSyncDefaultedOn")
+        .and_then(|raw| raw.as_bool())
+        .unwrap_or(false);
+
+    if !zone_transition_sync_defaulted {
+        if !settings
+            .get("zoneTransitionSyncEnabled")
+            .and_then(|raw| raw.as_bool())
+            .unwrap_or(true)
+        {
+            settings.insert(
+                "zoneTransitionSyncEnabled".to_string(),
+                serde_json::Value::Bool(true),
+            );
+        }
+        settings.insert(
+            "zoneTransitionSyncDefaultedOn".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
+
     value
 }
 
@@ -1546,6 +1578,22 @@ fn should_keep_existing_grail_entry(
     !existing_time.is_empty() && (incoming_time.is_empty() || existing_time <= incoming_time)
 }
 
+fn should_write_routine_backups_now() -> bool {
+    let now = Instant::now();
+    let Ok(mut last_write) = LAST_ROUTINE_BACKUP_WRITE.lock() else {
+        return false;
+    };
+    let Some(last) = *last_write else {
+        *last_write = Some(now);
+        return false;
+    };
+    let due = now.duration_since(last) >= ROUTINE_BACKUP_MIN_INTERVAL;
+    if due {
+        *last_write = Some(now);
+    }
+    due
+}
+
 fn persist_settings_with_options(
     app: &AppHandle,
     settings: &AppSettings,
@@ -1564,15 +1612,17 @@ fn persist_settings_with_options(
         .save()
         .map_err(|e| format!("Failed to save settings to disk: {}", e))?;
 
+    let write_backup_mirrors = write_routine_backups && should_write_routine_backups_now();
+
     // Never let routine saves of an empty/reset grail overwrite the safety backup.
     // Manual backups can still write the current state explicitly.
-    if write_routine_backups && !settings.holy_grail_found.is_empty() {
+    if write_backup_mirrors && !settings.holy_grail_found.is_empty() {
         if let Err(e) = write_holy_grail_backup_to_disk(app, &settings.holy_grail_found, false) {
             log_error(&format!("Failed to auto-backup Holy Grail data: {}", e));
         }
     }
 
-    if write_routine_backups {
+    if write_backup_mirrors {
         if let Err(e) = write_achievement_backup_to_disk(app, &settings.achievement_stats, false) {
             log_error(&format!("Failed to auto-backup achievement data: {}", e));
         }

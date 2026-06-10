@@ -26,7 +26,7 @@
   import { MATERIAL_TRACKER_NAMES } from '../lib/material-tracker';
   import { overlayLayoutKindFromWindowLabel, type OverlayLayoutKind } from '../lib/overlay-layout';
   import { fateCardTrackerRows } from '../lib/soe-13-items';
-  import { itemsDictionaryStore, settingsStore, type OverlayPosition } from '../stores';
+  import { itemsDictionaryStore, settingsStore, type DropTrackerStateSnapshot, type OverlayPosition } from '../stores';
 
   interface GameWindowRect {
     left: number;
@@ -34,6 +34,8 @@
     width: number;
     height: number;
   }
+
+  const TRACKER_TIMER_CARD_REFRESH_MS = 5_000;
 
   const window = getCurrentWebviewWindow();
   const kind = overlayLayoutKindFromWindowLabel(window.label);
@@ -119,6 +121,9 @@
   let mulingIndicatorOverlayEnabled = $derived(settingsStore.settings.mulingIndicatorOverlayEnabled);
   let mulingModeHotkey = $derived(settingsStore.settings.mulingModeHotkey);
   let overlayEnabled = $derived(isOverlayEnabled(kind));
+  let timerRowsVisible = $derived(
+    kind === 'drops' && overlayEnabled && (dropsTrackerRunTimerEnabled || dropsTrackerSessionTimerEnabled),
+  );
   let dropsTrackerRows = $derived(visibleCategoryRows(dropsTrackerCounts, dropsTrackerCategories, overlayRefreshNonce));
   let totalDropsTrackerRows = $derived(visibleCategoryRows(totalDropsTrackerCounts, totalDropsTrackerCategories, overlayRefreshNonce));
   let totalDropsTrackerTotal = $derived(countTotal(totalDropsTrackerCounts, totalDropsTrackerCategories) + overlayRefreshNonce * 0);
@@ -502,9 +507,6 @@
     dropsTrackerCounts;
     totalDropsTrackerCounts;
     dropsTrackerRunCount;
-    timerNow;
-    dropsTrackerRunElapsedMs;
-    dropsTrackerSessionElapsedMs;
     holyGrailFound;
     materialTrackerCounts;
     materialTrackerOverlayMaterials;
@@ -523,9 +525,13 @@
   onMount(() => {
     void itemsDictionaryStore.init();
     const unlisteners: Array<() => void> = [];
-    const timer = globalThis.setInterval(() => {
-      timerNow = Date.now();
-    }, 1000);
+    const timer = kind === 'drops'
+      ? globalThis.setInterval(() => {
+          if (timerRowsVisible) {
+            timerNow = Date.now();
+          }
+        }, TRACKER_TIMER_CARD_REFRESH_MS)
+      : null;
     let pendingTimerPause: number | null = null;
     const clearPendingTimerPause = () => {
       if (pendingTimerPause == null) return;
@@ -546,7 +552,7 @@
       if (ingame) {
         clearPendingTimerPause();
         settingsStore.setDropsTrackerTimersDisplayActive(true);
-        timerNow = Date.now();
+        if (kind === 'drops') timerNow = Date.now();
         return;
       }
 
@@ -554,15 +560,31 @@
       pendingTimerPause = globalThis.setTimeout(() => {
         pendingTimerPause = null;
         settingsStore.setDropsTrackerTimersDisplayActive(false);
-        timerNow = Date.now();
+        if (kind === 'drops') timerNow = Date.now();
       }, 2500);
     }).then((u) => unlisteners.push(u));
     invoke('get_game_status').then((status: unknown) => {
       settingsStore.setDropsTrackerTimersDisplayActive(status === 'ingame');
-      timerNow = Date.now();
+      if (kind === 'drops') timerNow = Date.now();
     }).catch(() => {
       settingsStore.setDropsTrackerTimersDisplayActive(false);
     });
+
+    listen<DropTrackerStateSnapshot>('drop-tracker-state-updated', (event) => {
+      settingsStore.mergeDropTrackerStateSnapshot(event.payload);
+      nudgeRender();
+      requestAnimationFrame(() => nudgeRender());
+      globalThis.setTimeout(() => nudgeRender(), 120);
+    }).then((u) => unlisteners.push(u));
+
+    listen<DropTrackerStateSnapshot['holyGrailFound']>('holy-grail-found-updated', (event) => {
+      if (!event.payload) return;
+      settingsStore.applyHolyGrailFoundSnapshot(event.payload);
+      nudgeRender();
+      requestAnimationFrame(() => nudgeRender());
+      globalThis.setTimeout(() => nudgeRender(), 120);
+    }).then((u) => unlisteners.push(u));
+
     document.addEventListener('pointermove', moveDrag);
     document.addEventListener('pointermove', resizeDrag);
     document.addEventListener('pointerup', endDrag);
@@ -571,7 +593,7 @@
     document.addEventListener('pointercancel', endResize);
 
     return () => {
-      globalThis.clearInterval(timer);
+      if (timer !== null) globalThis.clearInterval(timer);
       clearPendingTimerPause();
       if (saveTimeout) clearTimeout(saveTimeout);
       unlisteners.forEach((u) => u());

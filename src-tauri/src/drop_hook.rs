@@ -7,6 +7,7 @@ const DLL_NAME: &str = "ijl11.dll";
 const ORIGINAL_DLL_NAME: &str = "ijl11_orig.dll";
 const INI_NAME: &str = "DropIdentified.ini";
 const LOG_PATH: &str = r"C:\grail_drops.log";
+const DROP_HOOK_VERSION: &str = "drop-events-v2";
 
 const BUNDLED_DLL: &[u8] = include_bytes!("../resources/ijl11.dll");
 const BUNDLED_INI: &str = include_str!("../resources/DropIdentified.ini");
@@ -28,6 +29,14 @@ pub struct DropHookStatus {
     pub installed: bool,
     pub grail_installed: bool,
     pub identified_installed: bool,
+    pub dll_matches_bundled: bool,
+    pub managed_hook_present: bool,
+    pub hook_needs_update: bool,
+    pub unknown_dll_present: bool,
+    pub can_restore_original: bool,
+    pub hook_version_matches: bool,
+    pub hook_version: Option<String>,
+    pub expected_hook_version: String,
     pub current_dll_hash: Option<String>,
     pub bundled_dll_hash: String,
     pub message: String,
@@ -265,13 +274,21 @@ fn replace_drop_identified_section(contents: &str, config: &DropIdentifiedConfig
 
 fn auto_grail_section(enabled: bool) -> String {
     format!(
-        "[AutoGrail]\r\n; Controls whether SoE Companion treats the shared hook as the Auto Grail Tracker.\r\n; The shared ijl11.dll can also be used for Identified Drops.\r\nEnabled={}\r\n",
-        bool_ini(enabled)
+        "[AutoGrail]\r\n; Controls whether SoE Companion treats the shared hook as the required Drops Tracker Hook.\r\n; The shared ijl11.dll can also be used for Identified Drops.\r\nEnabled={}\r\nHookVersion={}\r\n",
+        bool_ini(enabled),
+        DROP_HOOK_VERSION
     )
 }
 
-fn parse_auto_grail_enabled(contents: &str) -> Option<bool> {
+#[derive(Debug, Clone, Default)]
+struct AutoGrailConfig {
+    enabled: Option<bool>,
+    hook_version: Option<String>,
+}
+
+fn parse_auto_grail_config(contents: &str) -> AutoGrailConfig {
     let mut in_auto_grail_section = false;
+    let mut config = AutoGrailConfig::default();
     for raw_line in contents.lines() {
         let line = raw_line.trim();
         if line.starts_with('[') && line.ends_with(']') {
@@ -284,11 +301,21 @@ fn parse_auto_grail_enabled(contents: &str) -> Option<bool> {
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
-        if key.trim().eq_ignore_ascii_case("Enabled") {
-            return parse_bool_value(value);
+        let key = key.trim();
+        if key.eq_ignore_ascii_case("Enabled") {
+            config.enabled = parse_bool_value(value);
+        } else if key.eq_ignore_ascii_case("HookVersion") {
+            let version = value.trim();
+            if !version.is_empty() {
+                config.hook_version = Some(version.to_string());
+            }
         }
     }
-    None
+    config
+}
+
+fn parse_auto_grail_enabled(contents: &str) -> Option<bool> {
+    parse_auto_grail_config(contents).enabled
 }
 
 fn replace_auto_grail_section(contents: &str, enabled: bool) -> String {
@@ -352,6 +379,20 @@ fn hash_file(path: &Path) -> Option<String> {
     fs::read(path).ok().map(|bytes| hash_bytes(&bytes))
 }
 
+fn bytes_contain(haystack: &[u8], needle: &[u8]) -> bool {
+    !needle.is_empty() && haystack.windows(needle.len()).any(|window| window == needle)
+}
+
+fn dll_looks_like_soe_hook(path: &Path) -> bool {
+    let Ok(bytes) = fs::read(path) else {
+        return false;
+    };
+    bytes_contain(&bytes, b"DropIdentified")
+        && (bytes_contain(&bytes, b"soe_companion_drops.log")
+            || bytes_contain(&bytes, b"grail_drops.log")
+            || bytes_contain(&bytes, b"ijl11_orig.dll"))
+}
+
 fn timestamp_suffix() -> String {
     chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
@@ -372,9 +413,22 @@ fn backup_existing_dll(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn has_soe_hook_marker(ini: &Path) -> bool {
+    if !ini.exists() {
+        return false;
+    }
+    let Ok(contents) = fs::read_to_string(ini) else {
+        return false;
+    };
+    let auto_grail = parse_auto_grail_config(&contents);
+    let identified = config_from_ini(&contents);
+    auto_grail.enabled.unwrap_or(false) || identified.enabled
+}
+
 fn install_shared_hook_dll(project_dir: &Path) -> Result<(), String> {
     let dll = dll_path(project_dir);
     let original = original_dll_path(project_dir);
+    let ini = ini_path(project_dir);
     let bundled_hash = hash_bytes(BUNDLED_DLL);
     let current_hash = hash_file(&dll);
     let already_installed = current_hash
@@ -386,7 +440,9 @@ fn install_shared_hook_dll(project_dir: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    if dll.exists() && !original.exists() {
+    let existing_is_managed_hook = dll_looks_like_soe_hook(&dll)
+        || (original.exists() && has_soe_hook_marker(&ini));
+    if dll.exists() && !original.exists() && !existing_is_managed_hook {
         fs::rename(&dll, &original).map_err(|e| {
             format!(
                 "Failed to rename {} to {}. Try running SoE Companion as administrator. {}",
@@ -406,6 +462,52 @@ fn install_shared_hook_dll(project_dir: &Path) -> Result<(), String> {
             e
         )
     })?;
+
+    Ok(())
+}
+
+fn restore_original_ijl11(project_dir: &Path) -> Result<(), String> {
+    let dll = dll_path(project_dir);
+    let original = original_dll_path(project_dir);
+    let ini = ini_path(project_dir);
+
+    if !original.exists() {
+        return Err(format!(
+            "No original ijl11.dll backup was found at {}.",
+            original.display()
+        ));
+    }
+
+    let status = build_status(Some(project_dir.display().to_string()), String::new());
+    if !status.can_restore_original {
+        return Err(
+            "The active ijl11.dll is not recognized as a SoE Companion hook, so it was not replaced."
+                .to_string(),
+        );
+    }
+
+    if dll.exists() {
+        backup_existing_dll(&dll)?;
+        fs::remove_file(&dll).map_err(|e| {
+            format!(
+                "Failed to remove {}. Try running SoE Companion as administrator. {}",
+                dll.display(),
+                e
+            )
+        })?;
+    }
+
+    fs::rename(&original, &dll).map_err(|e| {
+        format!(
+            "Failed to restore {} to {}. Try running SoE Companion as administrator. {}",
+            original.display(),
+            dll.display(),
+            e
+        )
+    })?;
+
+    let _ = write_ini_with_auto_grail_enabled(&ini, false);
+    let _ = write_ini_with_drop_identified_config(&ini, &DropIdentifiedConfig::default());
 
     Ok(())
 }
@@ -473,6 +575,15 @@ fn read_auto_grail_enabled_from_path(ini: &Path) -> Result<Option<bool>, String>
     Ok(parse_auto_grail_enabled(&contents))
 }
 
+fn read_auto_grail_config_from_path(ini: &Path) -> Result<AutoGrailConfig, String> {
+    if !ini.exists() {
+        return Ok(AutoGrailConfig::default());
+    }
+    let contents =
+        fs::read_to_string(ini).map_err(|e| format!("Failed to read {}: {}", ini.display(), e))?;
+    Ok(parse_auto_grail_config(&contents))
+}
+
 fn write_ini_with_drop_identified_config(
     ini: &Path,
     config: &DropIdentifiedConfig,
@@ -517,14 +628,31 @@ fn build_status(project_d2_dir: Option<String>, message: String) -> DropHookStat
     let bundled_hash = hash_bytes(BUNDLED_DLL);
     let current_hash = hash_file(&dll);
     let log_size = fs::metadata(&log).map(|m| m.len()).unwrap_or(0);
-    let installed = current_hash
+    let dll_exists = dll.exists();
+    let dll_matches_bundled = current_hash
         .as_deref()
         .map(|hash| hash == bundled_hash)
         .unwrap_or(false);
     let identified_config = read_drop_identified_config_from_path(&ini).unwrap_or_default();
+    let auto_grail_config = read_auto_grail_config_from_path(&ini).unwrap_or_default();
+    let auto_grail_enabled = auto_grail_config.enabled.unwrap_or(false);
+    let dll_looks_managed = dll_exists && dll_looks_like_soe_hook(&dll);
+    let ini_looks_managed = original.exists()
+        && dll_exists
+        && (auto_grail_enabled || identified_config.enabled);
+    let hook_version_matches = auto_grail_config
+        .hook_version
+        .as_deref()
+        .map(|version| version == DROP_HOOK_VERSION)
+        .unwrap_or(false);
+    let managed_hook_present = dll_matches_bundled || dll_looks_managed || ini_looks_managed;
+    let installed = dll_matches_bundled && hook_version_matches;
+    let hook_needs_update = dll_exists && managed_hook_present && !installed;
+    let unknown_dll_present = dll_exists && original.exists() && !managed_hook_present;
+    let can_restore_original =
+        original.exists() && (!dll_exists || dll_matches_bundled || managed_hook_present);
     let identified_installed = installed && identified_config.enabled;
-    let auto_grail_marker = read_auto_grail_enabled_from_path(&ini).unwrap_or(None);
-    let grail_installed = installed && auto_grail_marker.unwrap_or(!identified_installed);
+    let grail_installed = installed && auto_grail_enabled;
 
     DropHookStatus {
         project_d2_dir: project_dir.display().to_string(),
@@ -533,7 +661,7 @@ fn build_status(project_d2_dir: Option<String>, message: String) -> DropHookStat
         ini_path: ini.display().to_string(),
         log_path: log.display().to_string(),
         project_d2_dir_exists: project_dir.exists(),
-        dll_exists: dll.exists(),
+        dll_exists,
         original_dll_exists: original.exists(),
         ini_exists: ini.exists(),
         log_exists: log.exists(),
@@ -541,6 +669,14 @@ fn build_status(project_d2_dir: Option<String>, message: String) -> DropHookStat
         installed,
         grail_installed,
         identified_installed,
+        dll_matches_bundled,
+        managed_hook_present,
+        hook_needs_update,
+        unknown_dll_present,
+        can_restore_original,
+        hook_version_matches,
+        hook_version: auto_grail_config.hook_version,
+        expected_hook_version: DROP_HOOK_VERSION.to_string(),
         current_dll_hash: current_hash,
         bundled_dll_hash: bundled_hash,
         message,
@@ -561,19 +697,23 @@ pub fn get_drop_hook_status_for_path(project_d2_dir: Option<String>) -> DropHook
             status.project_d2_dir
         )
     } else if status.grail_installed && status.identified_installed {
-        "Shared SoE hook is installed. Auto Grail Tracker and Identified Drops are enabled."
+        "Shared SoE hook is installed. Drops Tracker Hook and Identified Drops are enabled."
             .to_string()
     } else if status.grail_installed {
-        "Auto Grail Tracker is installed. Identified Drops are off.".to_string()
+        "Drops Tracker Hook is installed. Identified Drops are off.".to_string()
     } else if status.identified_installed {
-        "Identified Drops are installed. Auto Grail Tracker is off.".to_string()
+        "Identified Drops are installed. Drops Tracker Hook is off.".to_string()
+    } else if status.hook_needs_update {
+        "Drops Tracker Hook is installed but needs an update for this app version.".to_string()
+    } else if status.unknown_dll_present {
+        "ProjectD2 has an ijl11.dll that is not recognized as the SoE Companion hook. Installing will back it up before replacing it.".to_string()
     } else if status.installed {
-        "Shared SoE hook is installed, but Auto Grail Tracker and Identified Drops are both off."
+        "Shared SoE hook is installed, but Drops Tracker Hook and Identified Drops are both off."
             .to_string()
     } else if status.dll_exists {
-        "ProjectD2 has an ijl11.dll, but it is not the bundled SoE Auto Grail Tracker.".to_string()
+        "ProjectD2 has an ijl11.dll, but it is not the bundled SoE Drops Tracker Hook.".to_string()
     } else {
-        "Auto Grail Tracker is not installed.".to_string()
+        "Drops Tracker Hook is not installed.".to_string()
     };
     build_status(project_d2_dir, message)
 }
@@ -591,6 +731,25 @@ pub fn install_drop_hook_for_path(
 }
 
 #[tauri::command]
+pub fn restore_original_ijl11_for_path(
+    project_d2_dir: Option<String>,
+) -> Result<DropHookStatus, String> {
+    let project_dir = normalize_project_d2_dir(project_d2_dir.clone());
+    if !project_dir.exists() {
+        return Err(format!(
+            "ProjectD2 folder was not found at {}.",
+            project_dir.display()
+        ));
+    }
+
+    restore_original_ijl11(&project_dir)?;
+    Ok(build_status(
+        project_d2_dir,
+        "Original ijl11.dll restored. Drops Tracker Hook and Identified Drops are disabled.".to_string(),
+    ))
+}
+
+#[tauri::command]
 pub fn install_auto_grail_hook_for_path(
     project_d2_dir: Option<String>,
 ) -> Result<DropHookStatus, String> {
@@ -603,6 +762,7 @@ pub fn install_auto_grail_hook_for_path(
     }
 
     let ini = ini_path(&project_dir);
+    let previous_status = build_status(project_d2_dir.clone(), String::new());
     install_shared_hook_dll(&project_dir)?;
 
     if !ini.exists() {
@@ -612,7 +772,13 @@ pub fn install_auto_grail_hook_for_path(
 
     Ok(build_status(
         project_d2_dir,
-        "Auto Grail Tracker installed. Identified Drops were left off.".to_string(),
+        if previous_status.hook_needs_update {
+            "Drops Tracker Hook updated for this app version. Identified Drops were left unchanged.".to_string()
+        } else if previous_status.unknown_dll_present {
+            "Unknown ijl11.dll backed up and Drops Tracker Hook installed. Identified Drops were left off.".to_string()
+        } else {
+            "Drops Tracker Hook installed. Identified Drops were left off.".to_string()
+        },
     ))
 }
 
@@ -645,9 +811,9 @@ pub fn install_identified_drops_hook_for_path(
     Ok(build_status(
         project_d2_dir,
         if next_auto_grail {
-            "Identified Drops installed. Auto Grail Tracker remains enabled.".to_string()
+            "Identified Drops installed. Drops Tracker Hook remains enabled.".to_string()
         } else {
-            "Identified Drops installed. Auto Grail Tracker remains off.".to_string()
+            "Identified Drops installed. Drops Tracker Hook remains off.".to_string()
         },
     ))
 }
@@ -672,9 +838,9 @@ pub fn uninstall_auto_grail_hook_for_path(
     Ok(build_status(
         project_d2_dir,
         if identified_enabled {
-            "Auto Grail Tracker removed. Identified Drops remain installed.".to_string()
+            "Drops Tracker Hook removed. Identified Drops remain installed.".to_string()
         } else {
-            "Auto Grail Tracker removed. Shared hook restored/removed.".to_string()
+            "Drops Tracker Hook removed. Shared hook restored/removed.".to_string()
         },
     ))
 }
@@ -699,7 +865,7 @@ pub fn uninstall_identified_drops_hook_for_path(
     Ok(build_status(
         project_d2_dir,
         if auto_grail_enabled {
-            "Identified Drops removed. Auto Grail Tracker remains installed.".to_string()
+            "Identified Drops removed. Drops Tracker Hook remains installed.".to_string()
         } else {
             "Identified Drops removed. Shared hook restored/removed.".to_string()
         },

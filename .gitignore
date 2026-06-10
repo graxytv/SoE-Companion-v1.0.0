@@ -8,6 +8,8 @@ target-*/
 src-tauri/target/
 src-tauri/target-*/
 fallback-known-good/
+fixed-hook-transfer/
+fixed-hook-transfer.zip
 
 # Local caches
 .svelte-kit/

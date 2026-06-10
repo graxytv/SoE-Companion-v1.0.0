@@ -4,7 +4,7 @@
   import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
   import { onMount } from 'svelte';
   import { LootHistoryPanel, NotificationStack } from '../components';
-  import { settingsStore, lootHistoryStore, itemsDictionaryStore, type OverlayPosition } from '../stores';
+  import { settingsStore, lootHistoryStore, itemsDictionaryStore, type DropTrackerStateSnapshot, type OverlayPosition } from '../stores';
   import { playSound } from '../lib/sound-player';
   import {
     DROP_TRACKER_CATEGORIES,
@@ -30,6 +30,7 @@
     mostRecentHolyGrailFind,
   } from '../lib/holy-grail';
   import { matchGsfDrop, summarizeGsfNeededBy, type GsfMatch } from '../lib/gsf-tracker';
+  import type { ItemDrop } from '../lib/item-drop';
   import {
     evaluateAchievements,
     materialAchievementNameFromDrop,
@@ -87,46 +88,12 @@
     gameHeight: number;
   }
 
+  const TRACKER_TIMER_CARD_REFRESH_MS = 5_000;
+  const DROP_COMMIT_DEFER_MS = 90;
+  const DROP_SOUND_DEFER_MS = 60;
+
   let { mode = 'game' }: Props = $props();
   const overlayWindow = getCurrentWebviewWindow();
-
-  interface NotificationFilter {
-    color?: string | null;
-    sound?: number | null;
-    display_stats: boolean;
-    matched_stat_lines?: number[] | null;
-  }
-
-  interface ItemDrop {
-    unit_id: number;
-    class: number;
-    item_code?: string;
-    itemCode?: string;
-    quality: string;
-    name: string;
-    base_name: string;
-    canonical_name?: string;
-    canonicalName?: string;
-    stats: string;
-    is_ethereal: boolean;
-    is_identified: boolean;
-    is_runeword?: boolean;
-    isRuneword?: boolean;
-    mode?: number;
-    file_index?: number;
-    is_hellforged?: boolean;
-    isHellforged?: boolean;
-    category?: string | null;
-    is_relic?: boolean;
-    history_pushed?: boolean;
-    source?: string;
-    name_source?: string;
-    is_new_grail?: boolean;
-    new_grail_label?: string;
-    gsf_needed_by?: string[];
-    seed?: number;
-    filter?: NotificationFilter | null;
-  }
 
   interface ItemWithState extends ItemDrop {
     exiting: boolean;
@@ -146,6 +113,7 @@
   const overlayLayoutAchievementPreviewName = 'Complete the Rune Grail Category';
   const soe13UniqueBaseCodeSet = new Set<string>(SOE_13_UNIQUE_BASE_CODES);
   let syntheticNotificationId = -1;
+  const pendingNewGrailKeys = new Set<string>();
 
   let items = $state<ItemWithState[]>([]);
   let achievementPopups = $state<Array<AchievementUnlockEntry & { popupId: string; exiting?: boolean }>>([]);
@@ -277,6 +245,12 @@
       ),
   );
   let renderGameTrackerCards = $derived(renderGameTrackers || (mode === 'game' && editActive));
+  let transparentTrackerTimerCardVisible = $derived(
+    mode === 'game' &&
+      dropsTrackerEnabled &&
+      renderGameTrackerCards &&
+      (dropsTrackerRunTimerEnabled || dropsTrackerSessionTimerEnabled),
+  );
   let holyGrailNewItemNotificationEnabled = $derived(settingsStore.settings.holyGrailNewItemNotificationEnabled);
   let holyGrailNewItemSoundSlot = $derived(settingsStore.settings.holyGrailNewItemSoundSlot);
   let holyGrailNewItemSoundVolume = $derived(settingsStore.settings.holyGrailNewItemSoundVolume);
@@ -315,12 +289,38 @@
       materialTrackerCounts: settingsStore.settings.materialTrackerCounts,
       fateCardDropCounts: settingsStore.settings.fateCardDropCounts,
       fateCardTrackerCounts: settingsStore.settings.fateCardTrackerCounts,
+      holyGrailFound: settingsStore.settings.holyGrailFound,
       achievementStats: settingsStore.settings.achievementStats,
     };
     // Emit a plain JSON payload rather than Svelte proxy objects. This keeps
     // the main window's Recently Tracked list in lockstep with the overlay
     // window after scanner-owned tracking updates.
     void emit('drop-tracker-state-updated', JSON.parse(JSON.stringify(snapshot)));
+  }
+
+  function deferDropCommit(work: () => void): void {
+    window.setTimeout(work, DROP_COMMIT_DEFER_MS);
+  }
+
+  function deferDropSound(work: () => void): void {
+    window.setTimeout(work, DROP_SOUND_DEFER_MS);
+  }
+
+  function newHolyGrailKeyForDrop(item: ItemDrop): string | null {
+    if (dropsTrackerMulingMode) return null;
+    if (isUnidentifiedUniqueSetDrop(item)) return null;
+    if (!hasTrustedExactUniqueSetName(item)) return null;
+    const grailItem = holyGrailItemFromDrop(item);
+    if (!grailItem || grailItem.category === 'fateCards') return null;
+    if (!settingsStore.isHolyGrailDropNew(item)) return null;
+    return grailItem.key;
+  }
+
+  function reserveNewHolyGrailDrop(item: ItemDrop): { isNew: boolean; key: string | null } {
+    const key = newHolyGrailKeyForDrop(item);
+    if (!key || pendingNewGrailKeys.has(key)) return { isNew: false, key };
+    pendingNewGrailKeys.add(key);
+    return { isNew: true, key };
   }
 
   function suppressGameEntryTracking(): void {
@@ -886,8 +886,6 @@
   function showFateCardGrailCompletedNotification(entry: HolyGrailFoundEntry): void {
     if (mode !== 'game') return;
     if (entry.category !== 'fateCards') return;
-    nudgeTrackerOverlayRender();
-    emitDropTrackerStateSnapshot();
     if (!holyGrailNewItemNotificationEnabled) return;
 
     syntheticNotificationId -= 1;
@@ -908,8 +906,40 @@
       filter: { color: 'gold', sound: null, display_stats: false },
     };
     addItem(displayItem, notificationDuration);
+    deferDropCommit(() => {
+      nudgeTrackerOverlayRender();
+      emitDropTrackerStateSnapshot();
+    });
     if (holyGrailNewItemSoundSlot != null) {
-      playSound(holyGrailNewItemSoundSlot, soundVolume * holyGrailNewItemSoundVolume);
+      deferDropSound(() => {
+        void playSound(holyGrailNewItemSoundSlot, soundVolume * holyGrailNewItemSoundVolume);
+      });
+    }
+  }
+
+  function showSyncedNewGrailNotification(item: ItemDrop): void {
+    if (mode !== 'game') return;
+    if (!holyGrailNewItemNotificationEnabled) return;
+
+    syntheticNotificationId -= 1;
+    const grailItem = holyGrailItemFromDrop(item);
+    const displayName = grailItem?.name ?? item.name ?? trackedItemDisplayName(item);
+    const displayItem: ItemDrop = {
+      ...item,
+      unit_id: syntheticNotificationId,
+      name: displayName,
+      base_name: item.base_name || displayName,
+      canonical_name: grailItem?.name ?? item.canonical_name ?? item.canonicalName ?? displayName,
+      is_new_grail: true,
+      new_grail_label: item.new_grail_label ?? 'New Grail Item!',
+      filter: item.filter ?? { color: 'gold', sound: null, display_stats: false },
+    };
+    addItem(displayItem, notificationDuration);
+    nudgeTrackerOverlayRender();
+    if (holyGrailNewItemSoundSlot != null) {
+      deferDropSound(() => {
+        void playSound(holyGrailNewItemSoundSlot, soundVolume * holyGrailNewItemSoundVolume);
+      });
     }
   }
 
@@ -1009,25 +1039,15 @@
       item.unit_id ? `unit=${item.unit_id}` : null,
     ].filter(Boolean).join(' ');
 
-    if (categories.length > 0) {
-      settingsStore.recordDropTrackerItem(displayName, categories, {
-        isNewGrail: isNewGrailItem,
-        source: debugSource,
-      });
-    }
-    if (materialName) {
-      settingsStore.recordAchievementMaterialDrop(materialName);
-    }
-    if (fateCardName) {
-      settingsStore.recordFateCardDrop(fateCardName);
-    }
-    if (trackerMaterialName) {
-      settingsStore.recordMaterialTrackerDrop(trackerMaterialName);
-    }
-    settingsStore.evaluateAchievementUnlocks({
-      holyGrailFound: settingsStore.settings.holyGrailFound,
+    settingsStore.recordLiveDrop({
+      displayName,
+      categories,
+      isNewGrail: isNewGrailItem,
+      source: debugSource,
+      materialAchievementName: materialName,
+      fateCardName,
+      trackerMaterialName,
       holyGrailItems,
-      runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
     });
     emitDropTrackerStateSnapshot();
     nudgeTrackerOverlayRender();
@@ -1041,7 +1061,7 @@
     const isNewGrailItem = settingsStore.recordHolyGrailDrop(item);
     if (isNewGrailItem) {
       nudgeTrackerOverlayRender();
-      void emit('holy-grail-found-updated', settingsStore.settings.holyGrailFound);
+      void emit('holy-grail-found-updated', JSON.parse(JSON.stringify(settingsStore.settings.holyGrailFound)));
       emitDropTrackerStateSnapshot();
     }
     return isNewGrailItem;
@@ -1134,7 +1154,6 @@
 
   onMount(() => {
     const unlisteners: Array<() => void> = [];
-    let syncTimer: number | null = null;
     let pendingTimerPause: number | null = null;
     if (mode === 'game') {
       suppressGameEntryTracking();
@@ -1149,12 +1168,11 @@
       pendingTimerPause = null;
     };
     const displayTimer = window.setInterval(() => {
-      timerNow = Date.now();
-      if (mode === 'game') {
-        settingsStore.tickDropsTrackerTimers();
-      }
-      nudgeTrackerOverlayRender();
-    }, 1000);
+      if (!transparentTrackerTimerCardVisible) return;
+      const now = Date.now();
+      timerNow = now;
+      settingsStore.tickDropsTrackerTimers(now);
+    }, TRACKER_TIMER_CARD_REFRESH_MS);
     document.addEventListener('pointermove', moveTrackerOverlay);
     document.addEventListener('pointerup', endTrackerOverlayDrag);
     document.addEventListener('pointercancel', endTrackerOverlayDrag);
@@ -1179,7 +1197,8 @@
       const hasFilterNotification = item.filter != null;
       const soe13DropNotification = shouldShowSoe13DropNotification(item);
       const allowNotification = !unidentifiedUniqueSet || notifyUnidentifiedUniqueSetDrops || soe13DropNotification;
-      const isNewGrailItem = recordHolyGrailDrop(item);
+      const reservedGrail = reserveNewHolyGrailDrop(item);
+      const isNewGrailItem = reservedGrail.isNew;
       const gsfMatches = gsfMatchesForDrop(item);
       const gsfNeededBy = gsfNotificationEnabled ? summarizeGsfNeededBy(gsfMatches) : [];
       const shouldShowVisualNotification =
@@ -1200,28 +1219,43 @@
       if (allowNotification && shouldShowVisualNotification) {
         addItem(displayItem, notificationDuration);
       }
-      if (!identifyInventoryEvent && item.history_pushed !== false) {
-        recordTrackerDrop(item, isNewGrailItem);
-      } else if (isNewGrailItem) {
-        settingsStore.recordGrailOnlyRecentItem(trackedItemDisplayName(item), categorizeDrop(item), {
-          source: 'identify-inventory grail-only',
-        });
-        emitDropTrackerStateSnapshot();
-      }
+      deferDropCommit(() => {
+        let recordedNewGrailItem = false;
+        try {
+          if (mode !== 'game') return;
+          recordedNewGrailItem = recordHolyGrailDrop(item);
+          const newGrailForTracker = recordedNewGrailItem || isNewGrailItem;
+          if (!identifyInventoryEvent && item.history_pushed !== false) {
+            recordTrackerDrop(item, newGrailForTracker);
+          } else if (newGrailForTracker) {
+            settingsStore.recordGrailOnlyRecentItem(trackedItemDisplayName(item), categorizeDrop(item), {
+              source: 'identify-inventory grail-only',
+            });
+            emitDropTrackerStateSnapshot();
+          }
+        } finally {
+          if (reservedGrail.key) pendingNewGrailKeys.delete(reservedGrail.key);
+        }
+      });
 
-      const itemSoundRule = findItemSoundRuleForDrop(item, itemSoundRules);
-      if (itemSoundRule?.soundSlot != null) {
-        playSound(itemSoundRule.soundSlot, soundVolume * itemSoundRule.volume);
-      } else if (isNewGrailItem && holyGrailNewItemSoundSlot != null) {
-        playSound(holyGrailNewItemSoundSlot, soundVolume * holyGrailNewItemSoundVolume);
-      }
+      deferDropSound(() => {
+        if (mode !== 'game') return;
+        const itemSoundRule = findItemSoundRuleForDrop(item, itemSoundRules);
+        if (itemSoundRule?.soundSlot != null) {
+          void playSound(itemSoundRule.soundSlot, soundVolume * itemSoundRule.volume);
+        } else if (isNewGrailItem && holyGrailNewItemSoundSlot != null) {
+          void playSound(holyGrailNewItemSoundSlot, soundVolume * holyGrailNewItemSoundVolume);
+        }
 
-      if (gsfMatches.length > 0 && gsfSoundSlot != null) {
-        playSound(gsfSoundSlot, soundVolume * gsfSoundVolume);
-      }
+        if (gsfMatches.length > 0 && gsfSoundSlot != null) {
+          void playSound(gsfSoundSlot, soundVolume * gsfSoundVolume);
+        }
 
-      const s = event.payload.filter?.sound;
-      if (allowNotification && shouldShowVisualNotification && s != null) playSound(s, soundVolume);
+        const s = event.payload.filter?.sound;
+        if (allowNotification && shouldShowVisualNotification && s != null) {
+          void playSound(s, soundVolume);
+        }
+      });
     }).then(u => unlisteners.push(u));
 
     listen<AchievementUnlockEntry>('achievement-unlocked', (event) => {
@@ -1231,6 +1265,10 @@
 
     listen<HolyGrailFoundEntry>('holy-grail-item-completed', (event) => {
       showFateCardGrailCompletedNotification(event.payload);
+    }).then(u => unlisteners.push(u));
+
+    listen<ItemDrop>('holy-grail-sync-notification', (event) => {
+      showSyncedNewGrailNotification(event.payload);
     }).then(u => unlisteners.push(u));
 
     const testAchievementPopup = (event: Event) => {
@@ -1246,11 +1284,18 @@
       window.setTimeout(() => nudgeTrackerOverlayRender(), 120);
     }).then(u => unlisteners.push(u));
 
-    listen<typeof settingsStore.settings.holyGrailFound>('holy-grail-found-updated', (event) => {
-      if (mode !== 'tracker') return;
-      settingsStore.mergeHolyGrailFound(event.payload);
+    listen<DropTrackerStateSnapshot>('drop-tracker-state-updated', (event) => {
+      settingsStore.mergeDropTrackerStateSnapshot(event.payload);
       nudgeTrackerOverlayRender();
       requestAnimationFrame(() => nudgeTrackerOverlayRender());
+      window.setTimeout(() => nudgeTrackerOverlayRender(), 120);
+    }).then(u => unlisteners.push(u));
+
+    listen<typeof settingsStore.settings.holyGrailFound>('holy-grail-found-updated', (event) => {
+      settingsStore.applyHolyGrailFoundSnapshot(event.payload);
+      nudgeTrackerOverlayRender();
+      requestAnimationFrame(() => nudgeTrackerOverlayRender());
+      window.setTimeout(() => nudgeTrackerOverlayRender(), 120);
     }).then(u => unlisteners.push(u));
 
     listen<OverlayLayoutPositionPreview>('overlay-layout-position-preview', (event) => {
@@ -1327,15 +1372,6 @@
       }
     }).then(u => unlisteners.push(u));
 
-    if (mode === 'game') {
-      // Periodically sync overlay position with Diablo II window
-      syncTimer = window.setInterval(() => {
-        invoke('sync_overlay_with_game').catch(() => {
-          // Silent: game might not be running or not focused
-        });
-      }, 1000);
-    }
-
     return () => {
       document.removeEventListener('pointermove', moveTrackerOverlay);
       document.removeEventListener('pointerup', endTrackerOverlayDrag);
@@ -1347,9 +1383,6 @@
       window.removeEventListener('achievement-test-popup', testAchievementPopup);
       unlisteners.forEach(u => u());
       itemsDictionaryStore.destroy();
-      if (syncTimer !== null) {
-        clearInterval(syncTimer);
-      }
       clearInterval(displayTimer);
       clearPendingTimerPause();
       // Clear all removal timers

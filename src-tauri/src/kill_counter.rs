@@ -76,8 +76,6 @@ impl AccountStatsWatcher {
         let stop = self.stop.clone();
 
         if dirs.is_empty() {
-            start_stash_accountstats_poll_thread(app.clone(), stop.clone(), last_signature.clone());
-            start_live_accountstats_thread(app, stop, last_signature);
             return;
         }
 
@@ -133,6 +131,7 @@ impl AccountStatsWatcher {
                     }
 
                     thread::sleep(Duration::from_millis(150));
+                    let _ = app.emit("save-folder-changed", ());
                     if let Ok(result) = windows_impl::read_accountstats_stash(None) {
                         let signature = account_stats_signature(&result);
                         let mut guard = match last_signature.lock() {
@@ -150,13 +149,6 @@ impl AccountStatsWatcher {
                 let _ = unsafe { CloseHandle(handle) };
             });
         }
-
-        start_stash_accountstats_poll_thread(
-            app.clone(),
-            self.stop.clone(),
-            last_signature.clone(),
-        );
-        start_live_accountstats_thread(app, self.stop.clone(), last_signature);
     }
 
     pub fn stop(&self) {
@@ -213,10 +205,23 @@ fn start_live_accountstats_thread(
     use tauri::Emitter;
 
     thread::spawn(move || {
+        let mut consecutive_failures = 0u32;
         while !stop.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1500));
-            let Ok(result) = windows_impl::read_accountstats_live_memory() else {
-                continue;
+            let delay = if consecutive_failures >= 3 {
+                Duration::from_secs(10)
+            } else {
+                Duration::from_millis(1500)
+            };
+            thread::sleep(delay);
+            let result = match windows_impl::read_accountstats_live_memory() {
+                Ok(result) => {
+                    consecutive_failures = 0;
+                    result
+                }
+                Err(_) => {
+                    consecutive_failures = consecutive_failures.saturating_add(1);
+                    continue;
+                }
             };
             let signature = account_stats_signature(&result);
             let mut guard = match last_signature.lock() {
@@ -242,7 +247,7 @@ fn start_stash_accountstats_poll_thread(
 
     thread::spawn(move || {
         while !stop.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1000));
+            thread::sleep(Duration::from_millis(5000));
             let Ok(result) = windows_impl::read_accountstats_stash(None) else {
                 continue;
             };
@@ -1521,6 +1526,15 @@ mod windows_impl {
         Ok(result)
     }
 
+    pub fn sync_accountstats_stash(stash_path: Option<String>) -> Result<KillSyncResult, String> {
+        let result = read_accountstats_stash(stash_path)?;
+        log_info(&format!(
+            "Synced account stats from stash: {} ({})",
+            result.total_kills, result.matched_text
+        ));
+        Ok(result)
+    }
+
     pub fn debug_accountstats_live(
         current_kills: u64,
         stash_path: Option<String>,
@@ -1579,6 +1593,12 @@ pub fn sync_accountstats_kills(
 
 #[cfg(target_os = "windows")]
 #[tauri::command]
+pub fn sync_accountstats_stash(stash_path: Option<String>) -> Result<KillSyncResult, String> {
+    windows_impl::sync_accountstats_stash(stash_path)
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
 pub fn debug_accountstats_live(
     current_kills: u64,
     stash_path: Option<String>,
@@ -1599,6 +1619,12 @@ pub fn sync_accountstats_kills(
     _current_kills: u64,
     _stash_path: Option<String>,
 ) -> Result<KillSyncResult, String> {
+    Err("Kill syncing is only supported on Windows.".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+pub fn sync_accountstats_stash(_stash_path: Option<String>) -> Result<KillSyncResult, String> {
     Err("Kill syncing is only supported on Windows.".to_string())
 }
 

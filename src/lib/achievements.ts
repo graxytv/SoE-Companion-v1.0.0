@@ -175,7 +175,7 @@ export const MATERIAL_ACHIEVEMENT_ITEMS: readonly MaterialAchievementItem[] = [
   { name: 'Splinter of the Void' },
   { name: 'Talisman of Transgression' },
   { name: 'Trang-Oul Jawbone' },
-  { name: 'Worldstone Shard', aliases: ['Worldstone Shards'] },
+  { name: 'Worldstone Shard', aliases: ['Worldstone Shards', 'WSS', 'wss'] },
   {
     name: 'Tainted Worldstone Shard',
     aliases: ['Tainted World Stone Shard', 'Tainted Worldstone Shards', 'Tainted WSS', 'Corrupted Worldstone Shard', 'cwss'],

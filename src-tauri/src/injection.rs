@@ -17,6 +17,8 @@ use windows::Win32::System::Threading::{
 use crate::offsets::{d2client, d2common, d2lang};
 use crate::process::ProcessHandle;
 
+const INJECT_REGION_SIZE: usize = 0x100;
+
 /// Allocated memory region in the target process
 #[cfg(target_os = "windows")]
 pub struct RemoteAlloc {
@@ -171,6 +173,8 @@ impl D2Injector {
         d2_lang: usize,
     ) -> Result<(), String> {
         let inject_base = d2_client + d2client::INJECT_BASE;
+        Self::verify_inject_region(process, inject_base)?;
+
         let string_addr = self.string_buffer.address as u32;
         let _params_addr = self.params_buffer.address as u32;
 
@@ -248,6 +252,26 @@ impl D2Injector {
         process.write_buffer(self.inject_new_automap_cell, &new_cell_code)?;
 
         Ok(())
+    }
+
+    fn verify_inject_region(process: &ProcessHandle, inject_base: usize) -> Result<(), String> {
+        let bytes = process.read_buffer(inject_base, INJECT_REGION_SIZE)?;
+        let safe = bytes
+            .iter()
+            .all(|byte| matches!(*byte, 0x00 | 0x90 | 0xCC));
+        if safe {
+            return Ok(());
+        }
+
+        let preview = bytes
+            .iter()
+            .take(16)
+            .map(|byte| format!("{:02X}", byte))
+            .collect::<Vec<_>>()
+            .join(" ");
+        Err(format!(
+            "D2Client injection region at 0x{inject_base:08X} is not empty/NOP/INT3; refusing to write scanner helper code. First bytes: {preview}"
+        ))
     }
 
     /// Get item name by calling the injected function

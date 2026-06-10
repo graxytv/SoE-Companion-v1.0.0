@@ -6,8 +6,19 @@
     import { onMount } from "svelte";
     import { Tabs } from "../components";
     import { windowState, itemsDictionaryStore, settingsStore, type DropTrackerStateSnapshot, type WindowState } from "../stores";
-    import { categorizeDrop } from "../lib/drop-tracker-categories";
-    import { buildHolyGrailItems, findHolyGrailItem } from "../lib/holy-grail";
+    import { categorizeDrop, type DropTrackerCategoryKey } from "../lib/drop-tracker-categories";
+    import { materialAchievementNameFromDrop } from "../lib/achievements";
+    import {
+        buildHolyGrailItems,
+        canonicalTrackedItemName,
+        cleanTrackedItemName,
+        findHolyGrailItem,
+        holyGrailItemFromDrop,
+        inferHolyGrailCategory,
+    } from "../lib/holy-grail";
+    import { materialNameFromDrop } from "../lib/item-sounds";
+    import { materialTrackerNameFromDrop } from "../lib/material-tracker";
+    import type { ItemDrop } from "../lib/item-drop";
     import { AchievementsTab, FateCardsTab, GeneralTab, HomeTab, LootFilterTab, OverlaysTab, SoundsTab, DropsTrackerTab, HolyGrailTab, SoeWikiTab } from "./index";
 
     let scannerStatus = $state<
@@ -39,13 +50,24 @@
     }
 
     // Grail drop log watcher state
-    let grailDropCount = $state(0);
     const GAME_ENTRY_TRACKING_SUPPRESSION_MS = 10_000;
     const MAX_LIVE_KILL_DELTA = 50_000;
-    const FATE_CARD_BACKGROUND_SYNC_INTERVAL_MS = 30 * 1000;
+    const QUIET_SYNC_DEBOUNCE_MS = 2500;
+    const QUIET_SYNC_COOLDOWN_MS = 10_000;
     let suppressTrackingUntilMs = $state(0);
-    let fateCardBackgroundSyncBusy = false;
+    let quietSyncBusy = false;
+    let quietSyncTimer: ReturnType<typeof setTimeout> | null = null;
+    let quietSyncSources = new Set<string>();
+    let lastQuietSyncAtMs = 0;
     let masterSyncing = $state(false);
+    let zoneTransitionSyncEnabled = $derived(settingsStore.settings.zoneTransitionSyncEnabled);
+
+    $effect(() => {
+        const enabled = zoneTransitionSyncEnabled;
+        void invoke("set_zone_transition_sync_enabled", { enabled }).catch((error) => {
+            console.warn("[MainWindow] Failed to update zone-transition sync state:", error);
+        });
+    });
 
     const tabs = [
         { id: "home", label: "Home" },
@@ -92,6 +114,9 @@
         gameStatus = status;
         if (status === "ingame" && previous !== "ingame") {
             suppressTrackingUntilMs = Date.now() + GAME_ENTRY_TRACKING_SUPPRESSION_MS;
+        }
+        if (status === "menu" && previous === "ingame") {
+            scheduleQuietSync("save-exit");
         }
     }
 
@@ -175,6 +200,20 @@
         message: string;
     }
 
+    interface HookDropEventsResult {
+        logPath: string;
+        events: ItemDrop[];
+        eventIds: string[];
+        linesRead: number;
+        skippedProcessed: number;
+        parseErrors: number;
+    }
+
+    interface CollectedDropRecordResult {
+        applied: boolean;
+        newGrailNotification?: ItemDrop;
+    }
+
     function evaluateAchievementUnlocks(): void {
         settingsStore.evaluateAchievementUnlocks({
             holyGrailFound: settingsStore.settings.holyGrailFound,
@@ -212,12 +251,237 @@
         });
     }
 
+    function emitDropTrackerStateSnapshot(): void {
+        const snapshot = {
+            dropsTrackerCounts: settingsStore.settings.dropsTrackerCounts,
+            totalDropsTrackerCounts: settingsStore.settings.totalDropsTrackerCounts,
+            dropsTrackerRecentItems: settingsStore.settings.dropsTrackerRecentItems,
+            runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
+            materialTrackerCounts: settingsStore.settings.materialTrackerCounts,
+            fateCardDropCounts: settingsStore.settings.fateCardDropCounts,
+            fateCardTrackerCounts: settingsStore.settings.fateCardTrackerCounts,
+            holyGrailFound: settingsStore.settings.holyGrailFound,
+            achievementStats: settingsStore.settings.achievementStats,
+        };
+        void emit("drop-tracker-state-updated", JSON.parse(JSON.stringify(snapshot)));
+    }
+
+    function isUniqueOrSetDrop(item: ItemDrop): boolean {
+        const quality = String(item.quality ?? "").toLowerCase();
+        return quality === "unique" || quality === "set";
+    }
+
+    function isUnidentifiedUniqueSetDrop(item: ItemDrop): boolean {
+        return isUniqueOrSetDrop(item) && !item.is_identified;
+    }
+
+    function isIdentifyInventoryEvent(item: ItemDrop): boolean {
+        return String(item.source ?? "").toLowerCase() === "identify-inventory";
+    }
+
+    function hasTrustedExactUniqueSetName(item: ItemDrop): boolean {
+        if (!isUniqueOrSetDrop(item) || !item.is_identified) return true;
+        if (holyGrailItemFromDrop(item)) return true;
+        const source = String(item.source ?? "").toLowerCase();
+        if (source === "grail-log") return true;
+        if (cleanTrackedItemName(item.canonical_name || item.canonicalName || "")) return true;
+        if (String(item.name_source ?? "").toLowerCase() === "live-tooltip") return true;
+        const cleanedName = trackedItemDisplayName(item);
+        return /\bhellforged\b/i.test(cleanedName);
+    }
+
+    function trackedItemDisplayName(item: ItemDrop): string {
+        if (isUnidentifiedUniqueSetDrop(item)) {
+            return `Unidentified ${cleanTrackedItemName(item.base_name || item.name || "item")}`;
+        }
+        const codeOnlyGrailItem = holyGrailItemFromDrop(item);
+        if (codeOnlyGrailItem && (item.item_code || item.itemCode)) {
+            return codeOnlyGrailItem.name;
+        }
+        const canonicalName = cleanTrackedItemName(item.canonical_name || item.canonicalName || "");
+        if (canonicalName) return canonicalTrackedItemName(canonicalName, inferHolyGrailCategory(item));
+        if (item.name) return canonicalTrackedItemName(item.name, inferHolyGrailCategory(item));
+        if (item.base_name) return canonicalTrackedItemName(item.base_name, inferHolyGrailCategory(item));
+        return "Unknown item";
+    }
+
+    function trackingCategoriesForDrop(item: ItemDrop): DropTrackerCategoryKey[] {
+        const grailItem = holyGrailItemFromDrop(item);
+        if (grailItem?.category === "su") return ["unique"];
+        if (grailItem?.category === "ssu") return ["hellforged"];
+        if (grailItem?.category === "sets") return ["sets"];
+        if (grailItem?.category === "fateCards") return ["fateCard"];
+        if (grailItem?.category === "hatredOrbs") return ["hatredOrb"];
+        if (grailItem?.category === "essences") return ["essence"];
+        if (grailItem?.category === "ascendancy") return ["ascendancy"];
+        if (!isUnidentifiedUniqueSetDrop(item) && hasTrustedExactUniqueSetName(item)) {
+            return categorizeDrop(item);
+        }
+        return String(item.quality ?? "").toLowerCase() === "set" ? ["sets"] : ["unique"];
+    }
+
+    function recordCollectedDrop(
+        item: ItemDrop,
+        holyGrailItems = buildHolyGrailItems(itemsDictionaryStore.dict),
+    ): CollectedDropRecordResult {
+        if (settingsStore.settings.dropsTrackerMulingMode) return { applied: false };
+
+        const identifyInventoryEvent = isIdentifyInventoryEvent(item);
+        const grailDropItem = holyGrailItemFromDrop(item);
+        let recordedNewGrailItem = false;
+        if (!isUnidentifiedUniqueSetDrop(item) && hasTrustedExactUniqueSetName(item)) {
+            recordedNewGrailItem = settingsStore.recordHolyGrailDrop(item);
+        }
+
+        const categories = trackingCategoriesForDrop(item);
+        const displayName = hasTrustedExactUniqueSetName(item)
+            ? trackedItemDisplayName(item)
+            : `Unverified ${cleanTrackedItemName(item.canonical_name || item.canonicalName || item.base_name || item.name || item.quality || "item")}`;
+        const trackerMaterialName = materialTrackerNameFromDrop(item);
+        const matchedMaterialName = materialNameFromDrop(item);
+        const materialName =
+            materialAchievementNameFromDrop(item.canonical_name || item.canonicalName) ??
+            materialAchievementNameFromDrop(item.base_name) ??
+            materialAchievementNameFromDrop(displayName) ??
+            materialAchievementNameFromDrop(matchedMaterialName);
+        const fateCardName = grailDropItem?.category === "fateCards" ? grailDropItem.name : null;
+        const newGrailNotification = recordedNewGrailItem
+            ? {
+                ...item,
+                name: grailDropItem?.name ?? displayName,
+                base_name: item.base_name || grailDropItem?.name || displayName,
+                canonical_name: grailDropItem?.name ?? item.canonical_name ?? item.canonicalName ?? displayName,
+                is_new_grail: true,
+                new_grail_label: "New Grail Item!",
+                filter: item.filter ?? { color: "gold", sound: null, display_stats: false },
+            }
+            : undefined;
+        if (fateCardName && !categories.includes("fateCard")) {
+            categories.push("fateCard");
+        }
+        if (grailDropItem?.category === "hatredOrbs" && !categories.includes("hatredOrb")) {
+            categories.push("hatredOrb");
+        }
+        if (grailDropItem?.category === "essences" && !categories.includes("essence")) {
+            categories.push("essence");
+        }
+        if (grailDropItem?.category === "ascendancy" && !categories.includes("ascendancy")) {
+            categories.push("ascendancy");
+        }
+        const hasTrackerWork =
+            categories.length > 0 || !!materialName || !!trackerMaterialName || !!fateCardName;
+
+        if (!identifyInventoryEvent && hasTrackerWork) {
+            const debugSource = [
+                item.source ?? "silent-scan",
+                item.item_code || item.itemCode ? `code=${item.item_code || item.itemCode}` : null,
+                item.name_source ? `name=${item.name_source}` : null,
+                item.canonical_name || item.canonicalName ? `canonical=${item.canonical_name || item.canonicalName}` : null,
+                item.mode != null ? `mode=${item.mode}` : null,
+                item.file_index != null ? `idx=${item.file_index}` : null,
+                item.seed ? `seed=${item.seed}` : null,
+                item.unit_id ? `unit=${item.unit_id}` : null,
+            ].filter(Boolean).join(" ");
+
+            settingsStore.recordLiveDrop({
+                displayName,
+                categories,
+                isNewGrail: recordedNewGrailItem,
+                source: debugSource,
+                materialAchievementName: materialName,
+                fateCardName,
+                trackerMaterialName,
+                holyGrailItems,
+            });
+            return { applied: true, newGrailNotification };
+        }
+
+        if (recordedNewGrailItem) {
+            settingsStore.recordGrailOnlyRecentItem(trackedItemDisplayName(item), categorizeDrop(item), {
+                source: "identify-inventory grail-only",
+            });
+            return { applied: true, newGrailNotification };
+        }
+
+        return { applied: false };
+    }
+
+    async function readHookLoggedDrops(reason: string): Promise<HookDropEventsResult | null> {
+        try {
+            return await invoke<HookDropEventsResult>("read_hook_drop_events", {
+                processedIds: settingsStore.settings.processedHookDropIds,
+            });
+        } catch (error) {
+            console.warn(`[MainWindow] Failed to read hook drop events for ${reason}:`, error);
+            return null;
+        }
+    }
+
+    async function flushCollectedDrops(reason: string): Promise<number> {
+        let drops: ItemDrop[] = [];
+        try {
+            drops = await invoke<ItemDrop[]>("drain_collected_drops");
+        } catch (error) {
+            console.warn(`[MainWindow] Failed to drain collected drops for ${reason}:`, error);
+        }
+
+        const hookDrops = await readHookLoggedDrops(reason);
+        if (hookDrops?.parseErrors) {
+            console.warn(`[MainWindow] Hook drop log had ${hookDrops.parseErrors} parse error(s):`, hookDrops.logPath);
+        }
+
+        const hookEvents = hookDrops?.events ?? [];
+        if (drops.length === 0 && hookEvents.length === 0) return 0;
+        const holyGrailItems = buildHolyGrailItems(itemsDictionaryStore.dict);
+        let applied = 0;
+        const newGrailNotifications: ItemDrop[] = [];
+        for (const drop of drops) {
+            try {
+                const result = recordCollectedDrop(drop, holyGrailItems);
+                if (result.applied) applied += 1;
+                if (result.newGrailNotification) newGrailNotifications.push(result.newGrailNotification);
+            } catch (error) {
+                console.warn("[MainWindow] Failed to apply collected drop:", drop, error);
+            }
+        }
+        const appliedHookEventIds: string[] = [];
+        for (const [index, drop] of hookEvents.entries()) {
+            try {
+                const result = recordCollectedDrop(drop, holyGrailItems);
+                if (result.applied) {
+                    applied += 1;
+                    const eventId = hookDrops?.eventIds[index];
+                    if (eventId) appliedHookEventIds.push(eventId);
+                }
+                if (result.newGrailNotification) newGrailNotifications.push(result.newGrailNotification);
+            } catch (error) {
+                console.warn("[MainWindow] Failed to apply hook drop:", drop, error);
+            }
+        }
+        if (appliedHookEventIds.length) {
+            settingsStore.addProcessedHookDropIds(appliedHookEventIds);
+        }
+
+        if (applied > 0) {
+            await emit("holy-grail-found-updated", JSON.parse(JSON.stringify(settingsStore.settings.holyGrailFound)));
+            emitDropTrackerStateSnapshot();
+            for (const drop of newGrailNotifications) {
+                void emit("holy-grail-sync-notification", drop).catch((error) => {
+                    console.warn("[MainWindow] Failed to emit synced grail notification:", error);
+                });
+            }
+        }
+        return applied;
+    }
+
     async function syncEverything(): Promise<void> {
         if (masterSyncing) return;
         masterSyncing = true;
         const failed: string[] = [];
 
         try {
+            await flushCollectedDrops("Sync All");
+
             try {
                 const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
                     stashPath: settingsStore.settings.runewordPlannerStashPath,
@@ -259,21 +523,74 @@
         }
     }
 
-    async function syncFateCardsInBackground(): Promise<void> {
-        if (fateCardBackgroundSyncBusy) return;
-        if (masterSyncing) return;
-        if (activeTab === "fate-cards" || activeTab === "holy-grail") return;
-        fateCardBackgroundSyncBusy = true;
+    async function syncFromQuietTrigger(sources: string[] = []): Promise<void> {
+        if (quietSyncBusy || masterSyncing) return;
+        quietSyncBusy = true;
+        const label = sources.length > 0 ? sources.join(", ") : "quiet trigger";
         try {
-            const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
-                stashPath: null,
-            });
-            settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
-        } catch (error) {
-            console.warn("[MainWindow] Background Fate Card stash sync failed:", error);
+            await flushCollectedDrops(label);
+            try {
+                const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
+                await emit("master-shared-stash-synced", result);
+            } catch (error) {
+                console.warn(`[MainWindow] ${label} shared-stash sync failed:`, error);
+            }
+
+            try {
+                const result = await invoke<AccountStatsSyncResult>("sync_accountstats_stash", {
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                mergeAccountStatsSyncResult(result);
+            } catch (error) {
+                console.warn(`[MainWindow] ${label} account-stats sync failed:`, error);
+            }
+
+            try {
+                const result = await invoke<CharacterLevelSyncResult>("sync_character_levels", {
+                    stashPath: settingsStore.settings.runewordPlannerStashPath,
+                });
+                applyCharacterLevelSyncResult(result);
+            } catch (error) {
+                console.warn(`[MainWindow] ${label} character-level sync failed:`, error);
+            }
         } finally {
-            fateCardBackgroundSyncBusy = false;
+            evaluateAchievementUnlocks();
+            lastQuietSyncAtMs = Date.now();
+            quietSyncBusy = false;
+            if (quietSyncSources.size > 0 && !quietSyncTimer && !masterSyncing) {
+                armQuietSyncTimer();
+            }
         }
+    }
+
+    function isPriorityQuietSyncSource(source: string): boolean {
+        return source === "save-exit" || source === "save-folder";
+    }
+
+    function armQuietSyncTimer(): void {
+        if (quietSyncBusy || masterSyncing || quietSyncTimer) return;
+        const sources = [...quietSyncSources];
+        const hasPrioritySource = sources.some(isPriorityQuietSyncSource);
+        const now = Date.now();
+        if (!hasPrioritySource && lastQuietSyncAtMs > 0 && now - lastQuietSyncAtMs < QUIET_SYNC_COOLDOWN_MS) {
+            quietSyncSources.clear();
+            return;
+        }
+
+        quietSyncTimer = setTimeout(() => {
+            const pendingSources = [...quietSyncSources];
+            quietSyncSources.clear();
+            quietSyncTimer = null;
+            void syncFromQuietTrigger(pendingSources);
+        }, hasPrioritySource ? QUIET_SYNC_DEBOUNCE_MS : QUIET_SYNC_DEBOUNCE_MS);
+    }
+
+    function scheduleQuietSync(source: string): void {
+        quietSyncSources.add(source);
+        armQuietSyncTimer();
     }
 
     async function saveWindowState() {
@@ -314,10 +631,6 @@
 
         restoreWindowState();
         itemsDictionaryStore.init();
-        void syncFateCardsInBackground();
-        const fateCardSyncTimer = globalThis.setInterval(() => {
-            void syncFateCardsInBackground();
-        }, FATE_CARD_BACKGROUND_SYNC_INTERVAL_MS);
 
         // Scanner / game status (kept for overlay compatibility)
         listen<string>("scanner-status", (event) => {
@@ -343,7 +656,6 @@
         // which verifies ground-mode items and live tooltip names.
         listen<{ itemName: string; quality: string }>("grail-drop", (event) => {
             if (isGameEntryTrackingSuppressed()) return;
-            grailDropCount += 1;
             console.debug("[MainWindow] Ignored live grail log entry", event.payload);
             // Auto-navigate to the grail tab on a new drop so the user sees it
             // (comment this out if you find it annoying)
@@ -356,6 +668,14 @@
 
         listen<AccountStatsSyncResult>("account-stats-updated", (event) => {
             handleAccountStatsUpdate(event.payload);
+        }).then((u) => unlisteners.push(u));
+
+        listen("save-folder-changed", () => {
+            scheduleQuietSync("save-folder");
+        }).then((u) => unlisteners.push(u));
+
+        listen("zone-transition-sync-requested", () => {
+            scheduleQuietSync("zone-transition");
         }).then((u) => unlisteners.push(u));
 
         const window = getCurrentWebviewWindow();
@@ -372,7 +692,7 @@
         window.onResized(debouncedSave).then((u) => unlisteners.push(u));
 
         return () => {
-            globalThis.clearInterval(fateCardSyncTimer);
+            if (quietSyncTimer) clearTimeout(quietSyncTimer);
             if (saveTimeout) clearTimeout(saveTimeout);
             unlisteners.forEach((u) => u());
             itemsDictionaryStore.destroy();
@@ -435,7 +755,7 @@
                 {:else if tab === "drops-tracker"}
                     <DropsTrackerTab bind:activeSubTab={dropsTrackerSubTab} />
                 {:else if tab === "holy-grail"}
-                    <HolyGrailTab bind:activeSubTab={holyGrailSubTab} grailDropCount={grailDropCount} />
+                    <HolyGrailTab bind:activeSubTab={holyGrailSubTab} />
                 {:else if tab === "fate-cards"}
                     <FateCardsTab />
                 {:else if tab === "soe-wiki"}

@@ -296,6 +296,8 @@ export const SOE_13_ESSENCE_CODE_NAMES: Record<string, string> = {
 };
 
 export const SOE_13_GENERAL_MATERIAL_CODE_NAMES: Record<string, string> = {
+  wss: 'Worldstone Shard',
+  cwss: 'Tainted Worldstone Shard',
   csor: 'Chaos Orb',
   etor: 'Eternal Orb',
   ooal: 'Orb of Alchemy',

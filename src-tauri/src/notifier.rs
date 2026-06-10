@@ -13,8 +13,6 @@ use std::time::{Duration, Instant};
 #[cfg(target_os = "windows")]
 use crate::d2types::{ItemData, ScannedItem, UnitAny};
 #[cfg(target_os = "windows")]
-use crate::injection::D2Injector;
-#[cfg(target_os = "windows")]
 use crate::logger::{error as log_error, info as log_info};
 #[cfg(target_os = "windows")]
 use crate::loot_filter_hook::LootFilterHook;
@@ -331,13 +329,12 @@ impl DropScanner {
         state: Arc<SharedScannerState>,
         loot_history: Arc<RwLock<crate::loot_history::LootHistory>>,
     ) -> Result<Self, String> {
-        // Initialize and inject the loot filter hook (uses ctx from shared state).
-        let mut loot_hook = LootFilterHook::new();
-        if state.ctx.d2_sigma != 0 {
-            if let Err(e) = loot_hook.inject(&state.ctx) {
-                log_error(&format!("Failed to inject LootFilterHook: {}", e));
-            }
-        }
+        // SoE Companion uses the native ProjectD2/SoE loot filter file.
+        // The inherited in-process label trampoline can corrupt game visuals
+        // when D2Sigma.dll changes between patches, so keep the manager as a
+        // no-op cleanup guard but never patch D2Sigma.dll at scanner startup.
+        let loot_hook = LootFilterHook::new();
+        log_info("LootFilterHook: disabled for safe scanner mode");
 
         Ok(Self {
             state,

@@ -12,7 +12,6 @@
     holyGrailCategoryProgress,
     holyGrailProgress,
     mostRecentHolyGrailFind,
-    findHolyGrailItem,
     type HolyGrailCategoryKey,
   } from '../lib/holy-grail';
   import {
@@ -26,39 +25,17 @@
   } from '../lib/runewords';
   import { detailsForGrailItem, type GrailItemDetails } from '../lib/grail-item-details';
 
-  let { activeSubTab = $bindable('overview'), grailDropCount = 0 }: {
+  let { activeSubTab = $bindable('overview') }: {
     activeSubTab?: string;
-    grailDropCount?: number;
   } = $props();
 
   const subTabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'runeword-planner', label: 'What RW Can I Make?' },
-    { id: 'import', label: 'Install Auto Grail Tracker' },
     { id: 'notifications', label: 'Notifications' },
     { id: 'backup', label: 'Backup' },
   ];
   const SHARED_STASH_SYNC_INTERVAL_MS = 30 * 1000;
-
-  interface DropHookStatus {
-    projectD2Dir: string;
-    dllPath: string;
-    originalDllPath: string;
-    iniPath: string;
-    logPath: string;
-    projectD2DirExists: boolean;
-    dllExists: boolean;
-    originalDllExists: boolean;
-    iniExists: boolean;
-    logExists: boolean;
-    logSize: number;
-    installed: boolean;
-    grailInstalled: boolean;
-    identifiedInstalled: boolean;
-    currentDllHash: string | null;
-    bundledDllHash: string;
-    message: string;
-  }
 
   let orderedSubTabs = $derived(applyTabOrder(subTabs, settingsStore.settings.holyGrailSubTabOrder));
 
@@ -72,13 +49,6 @@
   let backupMessage = $state('');
   let backupStatus = $state<{ backupExists: boolean; backupPath: string; foundCount: number; exportedAt: string | null } | null>(null);
 
-  // Grail log import
-  let importBusy = $state(false);
-  let importMessage = $state('');
-  let importCount = $state(0);
-  let hookBusy = $state(false);
-  let hookStatus = $state<DropHookStatus | null>(null);
-  let projectD2PathDraft = $state(settingsStore.settings.projectD2Path ?? '');
   let runeSyncBusy = $state(false);
   let runeSyncMessage = $state('Shared-stash sync reads rune material counts and Fate Card item stacks from the selected pd2_shared.stash file.');
   let lastRuneSyncAt = $state<string | null>(null);
@@ -286,8 +256,6 @@
   function confirmReset(): void {
     settingsStore.resetHolyGrail();
     pendingReset = false;
-    importCount = 0;
-    importMessage = '';
     backupMessage = 'Holy Grail reset.';
   }
 
@@ -343,129 +311,8 @@
     }
   }
 
-  async function refreshHookStatus(): Promise<void> {
-    try {
-      hookStatus = await invoke<DropHookStatus>('get_drop_hook_status_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
-      if (!settingsStore.settings.projectD2Path && hookStatus.projectD2DirExists) {
-        settingsStore.setProjectD2Path(hookStatus.projectD2Dir);
-        projectD2PathDraft = hookStatus.projectD2Dir;
-      }
-    } catch (error) {
-      importMessage = `Could not check Auto Grail Tracker status: ${error}`;
-    }
-  }
-
-  async function autoDetectProjectD2Folder(): Promise<void> {
-    hookBusy = true;
-    importMessage = 'Searching common ProjectD2 folders...';
-    try {
-      const paths = await invoke<string[]>('detect_project_d2_dirs');
-      const first = paths[0] ?? '';
-      if (!first) {
-        importMessage = 'No ProjectD2 folder found in common install locations. Paste your ProjectD2 folder path below.';
-        return;
-      }
-      projectD2PathDraft = first;
-      settingsStore.setProjectD2Path(first);
-      await refreshHookStatus();
-    } catch (error) {
-      importMessage = `Auto-detect failed: ${error}`;
-    } finally {
-      hookBusy = false;
-    }
-  }
-
-  async function chooseProjectD2Folder(): Promise<void> {
-    const selected = window.prompt(
-      'Enter the full path to your ProjectD2 folder:',
-      projectD2PathDraft || settingsStore.settings.projectD2Path || hookStatus?.projectD2Dir || 'C:\\Program Files (x86)\\Diablo II\\ProjectD2',
-    );
-    if (selected == null) return;
-    projectD2PathDraft = selected.trim();
-    settingsStore.setProjectD2Path(projectD2PathDraft);
-    await refreshHookStatus();
-  }
-
-  async function saveProjectD2Folder(): Promise<void> {
-    settingsStore.setProjectD2Path(projectD2PathDraft);
-    await refreshHookStatus();
-  }
-
-  async function installHook(): Promise<void> {
-    hookBusy = true;
-    importMessage = '';
-    try {
-      hookStatus = await invoke<DropHookStatus>('install_auto_grail_hook_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
-      if (!settingsStore.settings.projectD2Path && hookStatus.projectD2DirExists) {
-        settingsStore.setProjectD2Path(hookStatus.projectD2Dir);
-        projectD2PathDraft = hookStatus.projectD2Dir;
-      }
-      importMessage = hookStatus.message;
-    } catch (error) {
-      importMessage = `Install failed: ${error}`;
-      await refreshHookStatus();
-    } finally {
-      hookBusy = false;
-    }
-  }
-
-  async function uninstallHook(): Promise<void> {
-    hookBusy = true;
-    importMessage = '';
-    try {
-      hookStatus = await invoke<DropHookStatus>('uninstall_auto_grail_hook_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
-      importMessage = hookStatus.message;
-    } catch (error) {
-      importMessage = `Remove failed: ${error}`;
-      await refreshHookStatus();
-    } finally {
-      hookBusy = false;
-    }
-  }
-
-  // Import from C:\grail_drops.log written by ijl11.dll
-  async function importFromLog(): Promise<void> {
-    importBusy = true;
-    importMessage = '';
-    try {
-      const drops = await invoke<Array<{ itemName: string; quality: string }>>('read_grail_log');
-      let matched = 0;
-      let skipped = 0;
-      const importedKeys = new Set(Object.keys(found));
-      for (const drop of drops) {
-        const grailItem = findHolyGrailItem(drop.itemName);
-        if (grailItem?.category === 'fateCards') {
-          skipped++;
-        } else if (grailItem && !importedKeys.has(grailItem.key)) {
-          settingsStore.setHolyGrailFound(grailItem.key, grailItem.name, grailItem.category, true);
-          importedKeys.add(grailItem.key);
-          matched++;
-        } else if (!grailItem) {
-          skipped++;
-        }
-      }
-      importCount = matched;
-      importMessage = `Imported ${matched} new grail item${matched !== 1 ? 's' : ''} from log.${skipped > 0 ? ` (${skipped} entries not recognized - rares/magic/etc.)` : ''}`;
-    } catch (error) {
-      importMessage = `Import failed: ${error}`;
-    } finally {
-      importBusy = false;
-    }
-  }
-
-  async function clearLog(): Promise<void> {
-    try {
-      await invoke('clear_grail_log');
-      importMessage = 'Log cleared. New session drops will be tracked fresh.';
-      importCount = 0;
-    } catch (error) {
-      importMessage = `Could not clear log: ${error}`;
-    }
-  }
-
   $effect(() => {
     void refreshBackupStatus();
-    void refreshHookStatus();
   });
 
   onMount(() => {
@@ -495,7 +342,7 @@
     <div>
       <h2 class="section-title grail-title">Holy Grail</h2>
       <p class="section-description grail-description">
-        Tracks unique and set items found in Sanctuary of Exile. Items auto-check via the drop log when ijl11.dll is active.
+        Tracks unique and set items found in Sanctuary of Exile. Items auto-check through the required Drops Tracker Hook.
       </p>
     </div>
     <div class="progress-card">
@@ -622,97 +469,6 @@
           </span>
         </div>
       {/each}
-    </div>
-  </div>
-  {/if}
-
-  {#if activeSubTab === 'import'}
-  <div class="settings-section">
-    <h2 class="section-title">Install Auto Grail Tracker</h2>
-    <p class="section-description">
-      Automatic grail tracking requires the SoE drop hook. It installs as <code>ijl11.dll</code> in the ProjectD2 folder, keeps the original as <code>ijl11_orig.dll</code>, and writes unique/set drops to <code>C:\grail_drops.log</code>.
-    </p>
-
-    <div class="hook-card">
-      <div class="hook-status">
-        <span class="import-status-dot" class:active={hookStatus?.grailInstalled}></span>
-        <div>
-          <strong>{hookStatus?.grailInstalled ? 'Installed' : 'Not Installed'}</strong>
-          <span>{hookStatus?.message ?? 'Checking Auto Grail Tracker status...'}</span>
-        </div>
-      </div>
-      <div class="hook-actions">
-        <Button variant="primary" size="sm" disabled={hookBusy || hookStatus?.grailInstalled} onclick={installHook}>
-          {hookBusy ? 'Installing...' : 'Install Auto Grail Tracker'}
-        </Button>
-        {#if hookStatus?.grailInstalled}
-          <Button variant="danger" size="sm" disabled={hookBusy} onclick={uninstallHook}>
-            Remove
-          </Button>
-        {/if}
-        <Button variant="secondary" size="sm" disabled={hookBusy} onclick={refreshHookStatus}>
-          Refresh Status
-        </Button>
-      </div>
-    </div>
-
-    <div class="project-d2-picker">
-      <label class="hook-path-field">
-        <span>ProjectD2 Folder</span>
-        <input
-          value={projectD2PathDraft}
-          placeholder="C:\Program Files (x86)\Diablo II\ProjectD2"
-          oninput={(event) => (projectD2PathDraft = (event.currentTarget as HTMLInputElement).value)}
-        />
-      </label>
-      <div class="hook-path-actions">
-        <Button variant="secondary" size="sm" disabled={hookBusy} onclick={autoDetectProjectD2Folder}>Auto Detect</Button>
-        <Button variant="secondary" size="sm" disabled={hookBusy} onclick={chooseProjectD2Folder}>Select Folder</Button>
-        <Button variant="primary" size="sm" disabled={hookBusy} onclick={saveProjectD2Folder}>Use Folder</Button>
-      </div>
-    </div>
-
-    <div class="hook-detail-grid">
-      <div><span>ProjectD2 Folder</span><strong>{hookStatus?.projectD2DirExists ? 'Found' : 'Missing'}</strong></div>
-      <div><span>Original DLL Backup</span><strong>{hookStatus?.originalDllExists ? 'Found' : 'Missing'}</strong></div>
-      <div><span>Config File</span><strong>{hookStatus?.iniExists ? 'Found' : 'Missing'}</strong></div>
-      <div><span>Drop Log</span><strong>{hookStatus?.logExists ? `${hookStatus.logSize} bytes` : 'No drops yet'}</strong></div>
-    </div>
-
-    <div class="import-card">
-      <div class="import-info">
-        <div class="import-status">
-          <span class="import-status-dot" class:active={grailDropCount > 0}></span>
-          <span>
-            {#if grailDropCount > 0}
-              Live - {grailDropCount} drop{grailDropCount !== 1 ? 's' : ''} this session
-            {:else}
-              Waiting for live grail drops
-            {/if}
-          </span>
-        </div>
-        {#if importCount > 0}
-          <span class="import-new-count">{importCount} new grail item{importCount !== 1 ? 's' : ''} found this session</span>
-        {/if}
-      </div>
-      <div class="import-actions">
-        <Button variant="primary" size="sm" disabled={importBusy} onclick={importFromLog}>
-          Import Log Now
-        </Button>
-        <Button variant="ghost" size="sm" disabled={importBusy} onclick={clearLog}>
-          Clear Log
-        </Button>
-      </div>
-    </div>
-
-    {#if importMessage}
-      <p class="import-message">{importMessage}</p>
-    {/if}
-
-    <div class="import-note">
-      <strong>Note:</strong> Close Diablo II before installing. If Windows blocks the install under Program Files, run SoE Companion as administrator and try again.
-      <br />
-      <span class="hook-path">{hookStatus?.dllPath ?? 'C:\\Program Files (x86)\\Diablo II\\ProjectD2\\ijl11.dll'}</span>
     </div>
   </div>
   {/if}
@@ -1000,30 +756,7 @@
   }
   .progress-count, .progress-latest { color: var(--text-primary); font-size: 12px; }
 
-  .hook-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; margin-bottom: 12px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); }
-  .hook-status { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text-secondary); font-size: 13px; }
-  .hook-status div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-  .hook-status strong { color: var(--text-primary); }
-  .hook-status span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hook-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
-  .project-d2-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); }
-  .hook-path-field { display: grid; gap: 6px; color: var(--text-secondary); font-size: 13px; }
-  .hook-path-field input { width: 100%; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-primary); color: var(--text-primary); }
-  .hook-path-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-  .hook-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .hook-detail-grid div { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); color: var(--text-muted); font-size: 12px; }
-  .hook-detail-grid strong { color: var(--text-primary); }
-  .hook-path { color: var(--text-secondary); font-family: var(--font-mono); }
-
-  .import-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); }
-  .import-info { display: flex; flex-direction: column; gap: 6px; }
-  .import-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
-  .import-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-  .import-status-dot.active { background: #4aaa3e; box-shadow: 0 0 6px #4aaa3e; }
-  .import-new-count { font-size: 13px; color: #d6a23a; font-weight: 600; }
-  .import-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .import-message { margin: 10px 0 0; color: var(--text-secondary); font-size: 13px; }
-  .import-note { margin-top: 14px; padding: 12px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 
   .backup-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px; border: 1px solid var(--border-primary); border-radius: 8px; background: var(--bg-secondary); }
   .backup-info { display: flex; flex-direction: column; gap: 5px; min-width: 0; color: var(--text-secondary); font-size: 13px; }

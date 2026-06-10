@@ -4,6 +4,7 @@ mod character_levels;
 mod d2types;
 mod drop_hook;
 mod grail_log;
+mod hook_log;
 mod hotkeys;
 mod injection;
 mod items_cache;
@@ -28,7 +29,7 @@ mod updater;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WindowEvent};
 
@@ -36,7 +37,7 @@ use crate::hotkeys::{EditModeState, HotkeyState, MulingModeHotkeyState};
 use crate::logger::{error as log_error, info as log_info};
 use crate::loot_history::{LootEntry, LootHistory, PickupState};
 
-use notifier::{DropScanner, ItemsDictionary};
+use notifier::{DropScanner, ItemDropEvent, ItemsDictionary};
 
 // Windows-only imports for process / overlay / privileges
 #[cfg(target_os = "windows")]
@@ -46,7 +47,7 @@ use std::os::windows::ffi::OsStrExt;
 #[cfg(target_os = "windows")]
 use windows::core::PCWSTR;
 #[cfg(target_os = "windows")]
-use windows::Win32::Foundation::{BOOL, COLORREF, HANDLE, HWND, RECT};
+use windows::Win32::Foundation::{CloseHandle, BOOL, COLORREF, HANDLE, HWND, RECT, WAIT_TIMEOUT};
 #[cfg(target_os = "windows")]
 use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_BORDER_COLOR};
 #[cfg(target_os = "windows")]
@@ -59,7 +60,10 @@ use windows::Win32::Security::{
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Com::CoTaskMemFree;
 #[cfg(target_os = "windows")]
-use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, WaitForSingleObject,
+    PROCESS_ACCESS_RIGHTS, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
 #[cfg(target_os = "windows")]
@@ -69,7 +73,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     HWND_TOPMOST, LWA_ALPHA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SW_HIDE, SW_SHOWNA, WS_BORDER, WS_CAPTION, WS_DLGFRAME, WS_EX_LAYERED,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-    WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    WS_POPUP, WS_SYSMENU, WS_THICKFRAME, GetWindowThreadProcessId, IsHungAppWindow,
 };
 
 /// Shared state for controlling the scanner
@@ -82,6 +86,10 @@ struct AppState {
     filter_enabled: Arc<AtomicBool>,
     /// When true, scanner logs per-item filter decisions (noisy; opt-in for debugging).
     verbose_filter_logging: Arc<AtomicBool>,
+    /// Optional low-impact sync trigger. It reads only tiny gameplay-state
+    /// pointers and asks the frontend to run the normal quiet sync once after
+    /// a transition settles.
+    zone_transition_sync_enabled: Arc<AtomicBool>,
     /// Driven by the reveal-hidden hotkey watcher; mirrored into the hook.
     reveal_hidden_active: Arc<AtomicBool>,
     filter_config_generation: Arc<AtomicU64>,
@@ -91,6 +99,10 @@ struct AppState {
     items_dictionary: Arc<RwLock<Option<ItemsDictionary>>>,
     /// Session loot history shared with scanner thread.
     loot_history: Arc<RwLock<LootHistory>>,
+    /// Quiet in-memory drop queue. The silent collector fills this while
+    /// playing; Save & Exit, zone-change sync, or Sync All drains it in one
+    /// frontend batch.
+    silent_drop_queue: Arc<Mutex<Vec<ItemDropEvent>>>,
     grail_log_watcher: grail_log::GrailLogWatcher,
     account_stats_watcher: kill_counter::AccountStatsWatcher,
 }
@@ -98,6 +110,49 @@ struct AppState {
 const GAME_STATUS_UNKNOWN: u8 = 0;
 const GAME_STATUS_INGAME: u8 = 1;
 const GAME_STATUS_MENU: u8 = 2;
+const SILENT_DROP_QUEUE_LIMIT: usize = 2_000;
+const SILENT_COLLECTOR_TICK_MS: u64 = 60;
+const SILENT_COLLECTOR_ATTACH_RETRY_MS: u64 = 2_000;
+#[cfg(target_os = "windows")]
+const PROCESS_SYNCHRONIZE: PROCESS_ACCESS_RIGHTS = PROCESS_ACCESS_RIGHTS(0x0010_0000);
+
+#[cfg(target_os = "windows")]
+fn is_diablo2_window_alive(hwnd: HWND) -> bool {
+    if hwnd.0.is_null() {
+        return false;
+    }
+    if unsafe { IsHungAppWindow(hwnd).as_bool() } {
+        return false;
+    }
+
+    let mut pid = 0u32;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, Some(&mut pid as *mut u32));
+    }
+    if pid == 0 {
+        return false;
+    }
+
+    let handle = unsafe {
+        OpenProcess(
+            PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION,
+            false,
+            pid,
+        )
+    };
+    let Ok(handle) = handle else {
+        return false;
+    };
+    if handle.is_invalid() {
+        return false;
+    }
+
+    let wait = unsafe { WaitForSingleObject(handle, 0) };
+    unsafe {
+        let _ = CloseHandle(handle);
+    }
+    wait == WAIT_TIMEOUT
+}
 
 /// Check if Diablo II window exists
 #[cfg(target_os = "windows")]
@@ -108,12 +163,216 @@ fn is_diablo2_running() -> bool {
         .collect();
 
     let hwnd = unsafe { FindWindowW(PCWSTR(class_wide.as_ptr()), PCWSTR::null()) };
-    hwnd.is_ok() && !hwnd.unwrap().0.is_null()
+    let Ok(hwnd) = hwnd else {
+        return false;
+    };
+    if hwnd.0.is_null() {
+        return false;
+    }
+    is_diablo2_window_alive(hwnd)
 }
 
 #[cfg(not(target_os = "windows"))]
 fn is_diablo2_running() -> bool {
     false
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ZoneSignature {
+    player_unit: u32,
+    automap_layer: u32,
+}
+
+#[cfg(target_os = "windows")]
+fn read_zone_signature(
+    ctx: &crate::process::D2Context,
+) -> Result<Option<ZoneSignature>, String> {
+    let player_unit = ctx
+        .process
+        .read_memory::<u32>(ctx.d2_client + crate::offsets::d2client::PLAYER_UNIT)?;
+    let automap_layer = ctx
+        .process
+        .read_memory::<u32>(ctx.d2_client + crate::offsets::d2client::AUTOMAP_LAYER)?;
+
+    if player_unit == 0 || automap_layer == 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(ZoneSignature {
+        player_unit,
+        automap_layer,
+    }))
+}
+
+#[cfg(target_os = "windows")]
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ZoneTransitionPayload<'a> {
+    reason: &'a str,
+    player_unit: u32,
+    automap_layer: u32,
+}
+
+#[cfg(target_os = "windows")]
+fn emit_zone_transition_sync(
+    app_handle: &AppHandle,
+    reason: &'static str,
+    signature: ZoneSignature,
+    last_emit: &mut Option<Instant>,
+    cooldown: Duration,
+) {
+    let now = Instant::now();
+    if last_emit
+        .map(|last| now.duration_since(last) < cooldown)
+        .unwrap_or(false)
+    {
+        return;
+    }
+
+    *last_emit = Some(now);
+    let payload = ZoneTransitionPayload {
+        reason,
+        player_unit: signature.player_unit,
+        automap_layer: signature.automap_layer,
+    };
+    if let Err(e) = app_handle.emit("zone-transition-sync-requested", payload) {
+        log_error(&format!(
+            "Failed to emit zone-transition-sync-requested: {}",
+            e
+        ));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn spawn_zone_transition_watcher(
+    should_run: Arc<AtomicBool>,
+    enabled: Arc<AtomicBool>,
+    app_handle: AppHandle,
+) {
+    thread::Builder::new()
+        .name("zone-transition-watcher".into())
+        .spawn(move || {
+            const POLL_INTERVAL: Duration = Duration::from_millis(750);
+            const STABLE_CONFIRM: Duration = Duration::from_millis(1500);
+            const EMIT_COOLDOWN: Duration = Duration::from_secs(15);
+
+            let mut ctx: Option<crate::process::D2Context> = None;
+            let mut last_stable: Option<ZoneSignature> = None;
+            let mut transition_pending = false;
+            let mut candidate_changed: Option<(ZoneSignature, Instant)> = None;
+            let mut last_emit: Option<Instant> = None;
+
+            while should_run.load(Ordering::SeqCst) {
+                thread::sleep(POLL_INTERVAL);
+
+                if !enabled.load(Ordering::SeqCst) {
+                    ctx = None;
+                    last_stable = None;
+                    transition_pending = false;
+                    candidate_changed = None;
+                    continue;
+                }
+
+                if !is_diablo2_running() {
+                    ctx = None;
+                    last_stable = None;
+                    transition_pending = false;
+                    candidate_changed = None;
+                    continue;
+                }
+
+                if ctx.is_none() {
+                    match crate::process::D2Context::new() {
+                        Ok(next) => ctx = Some(next),
+                        Err(_) => continue,
+                    }
+                }
+
+                let signature = match ctx.as_ref().map(read_zone_signature) {
+                    Some(Ok(value)) => value,
+                    Some(Err(_)) => {
+                        ctx = None;
+                        last_stable = None;
+                        transition_pending = false;
+                        candidate_changed = None;
+                        continue;
+                    }
+                    None => continue,
+                };
+
+                let now = Instant::now();
+                match signature {
+                    None => {
+                        if last_stable.is_some() {
+                            transition_pending = true;
+                        }
+                        candidate_changed = None;
+                    }
+                    Some(current) => {
+                        let Some(previous) = last_stable else {
+                            last_stable = Some(current);
+                            transition_pending = false;
+                            candidate_changed = None;
+                            continue;
+                        };
+
+                        if transition_pending {
+                            emit_zone_transition_sync(
+                                &app_handle,
+                                "loading-stable",
+                                current,
+                                &mut last_emit,
+                                EMIT_COOLDOWN,
+                            );
+                            last_stable = Some(current);
+                            transition_pending = false;
+                            candidate_changed = None;
+                            continue;
+                        }
+
+                        if current == previous {
+                            candidate_changed = None;
+                            continue;
+                        }
+
+                        match candidate_changed {
+                            Some((candidate, since))
+                                if candidate == current
+                                    && now.duration_since(since) >= STABLE_CONFIRM =>
+                            {
+                                emit_zone_transition_sync(
+                                    &app_handle,
+                                    "area-signature-changed",
+                                    current,
+                                    &mut last_emit,
+                                    EMIT_COOLDOWN,
+                                );
+                                last_stable = Some(current);
+                                candidate_changed = None;
+                            }
+                            Some((candidate, _)) if candidate == current => {}
+                            _ => {
+                                candidate_changed = Some((current, now));
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        .map_err(|e| {
+            log_error(&format!("Failed to spawn zone-transition watcher: {}", e));
+            e
+        })
+        .ok();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_zone_transition_watcher(
+    _should_run: Arc<AtomicBool>,
+    _enabled: Arc<AtomicBool>,
+    _app_handle: AppHandle,
+) {
 }
 
 /// Spawn the marker-scanner thread. Cancellation is checked at the top of
@@ -146,6 +405,193 @@ fn spawn_marker_thread(
         .ok()
 }
 
+fn push_silent_drop_events(
+    queue: &Arc<Mutex<Vec<ItemDropEvent>>>,
+    events: Vec<ItemDropEvent>,
+) {
+    let fresh_events: Vec<ItemDropEvent> = events.into_iter().collect();
+    if fresh_events.is_empty() {
+        return;
+    }
+
+    let Ok(mut guard) = queue.lock() else {
+        log_error("Failed to acquire silent drop queue lock");
+        return;
+    };
+
+    let added = fresh_events.len();
+    guard.extend(fresh_events);
+    if guard.len() > SILENT_DROP_QUEUE_LIMIT {
+        let excess = guard.len() - SILENT_DROP_QUEUE_LIMIT;
+        guard.drain(0..excess);
+    }
+    log_info(&format!(
+        "Silent drop collector queued {} drop(s); queue size={}",
+        added,
+        guard.len()
+    ));
+}
+
+fn spawn_silent_drop_collector(
+    should_run: Arc<AtomicBool>,
+    is_scanning: Arc<AtomicBool>,
+    verbose_filter_logging: Arc<AtomicBool>,
+    game_status: Arc<AtomicU8>,
+    items_dictionary: Arc<RwLock<Option<ItemsDictionary>>>,
+    loot_history: Arc<RwLock<LootHistory>>,
+    silent_drop_queue: Arc<Mutex<Vec<ItemDropEvent>>>,
+    scanner_thread: Arc<Mutex<Option<JoinHandle<()>>>>,
+    app_handle: AppHandle,
+) {
+    let handle = thread::Builder::new()
+        .name("silent-drop-collector".into())
+        .spawn(move || {
+            while should_run.load(Ordering::SeqCst) {
+                if !is_diablo2_running() {
+                    game_status.store(GAME_STATUS_UNKNOWN, Ordering::SeqCst);
+                    thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+                    continue;
+                }
+
+                is_scanning.store(true, Ordering::SeqCst);
+                if let Err(e) = app_handle.emit("scanner-status", "starting") {
+                    log_error(&format!("Failed to emit scanner-status starting: {}", e));
+                }
+
+                #[cfg(target_os = "windows")]
+                let mut scanner = {
+                    let ctx = match crate::process::D2Context::new() {
+                        Ok(ctx) => ctx,
+                        Err(e) => {
+                            log_error(&format!("Silent collector failed to attach: {}", e));
+                            is_scanning.store(false, Ordering::SeqCst);
+                            if let Err(e) = app_handle.emit("scanner-status", "error") {
+                                log_error(&format!("Failed to emit scanner-status error: {}", e));
+                            }
+                            thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+                            continue;
+                        }
+                    };
+                    let injector = match crate::injection::D2Injector::new(
+                        &ctx.process,
+                        ctx.d2_client,
+                        ctx.d2_common,
+                        ctx.d2_lang,
+                    ) {
+                        Ok(injector) => injector,
+                        Err(e) => {
+                            log_error(&format!("Silent collector injector setup failed: {}", e));
+                            is_scanning.store(false, Ordering::SeqCst);
+                            if let Err(e) = app_handle.emit("scanner-status", "error") {
+                                log_error(&format!("Failed to emit scanner-status error: {}", e));
+                            }
+                            thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+                            continue;
+                        }
+                    };
+                    let shared_state =
+                        Arc::new(crate::scanner_state::SharedScannerState::new(ctx, injector));
+                    match DropScanner::new(shared_state, loot_history.clone()) {
+                        Ok(scanner) => scanner,
+                        Err(e) => {
+                            log_error(&format!("Silent collector scanner setup failed: {}", e));
+                            is_scanning.store(false, Ordering::SeqCst);
+                            if let Err(e) = app_handle.emit("scanner-status", "error") {
+                                log_error(&format!("Failed to emit scanner-status error: {}", e));
+                            }
+                            thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+                            continue;
+                        }
+                    }
+                };
+
+                #[cfg(not(target_os = "windows"))]
+                let mut scanner = match DropScanner::new(loot_history.clone()) {
+                    Ok(scanner) => scanner,
+                    Err(e) => {
+                        log_error(&format!("Silent collector scanner setup failed: {}", e));
+                        is_scanning.store(false, Ordering::SeqCst);
+                        thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+                        continue;
+                    }
+                };
+
+                scanner.set_filter_enabled(false);
+                scanner.set_verbose_filter_logging(verbose_filter_logging.load(Ordering::SeqCst));
+                if let Err(e) = app_handle.emit("scanner-status", "running") {
+                    log_error(&format!("Failed to emit scanner-status running: {}", e));
+                }
+
+                let mut was_ingame = false;
+                let mut dict_published = false;
+
+                while should_run.load(Ordering::SeqCst) && is_diablo2_running() {
+                    scanner.set_verbose_filter_logging(verbose_filter_logging.load(Ordering::SeqCst));
+                    let ingame = scanner.is_ingame();
+                    game_status.store(
+                        if ingame {
+                            GAME_STATUS_INGAME
+                        } else {
+                            GAME_STATUS_MENU
+                        },
+                        Ordering::SeqCst,
+                    );
+
+                    if ingame && !was_ingame {
+                        log_info("Silent collector entered game");
+                        scanner.clear_cache();
+                        if let Ok(mut h) = loot_history.write() {
+                            h.clear();
+                        }
+                        scanner.suppress_item_events_for(Duration::from_secs(2));
+                        if let Err(e) = app_handle.emit("game-status", "ingame") {
+                            log_error(&format!("Failed to emit game-status ingame: {}", e));
+                        }
+                    } else if !ingame && was_ingame {
+                        if let Ok(mut h) = loot_history.write() {
+                            let _ = h.mark_all_pending_lost();
+                        }
+                        if let Err(e) = app_handle.emit("game-status", "menu") {
+                            log_error(&format!("Failed to emit game-status menu: {}", e));
+                        }
+                    }
+                    was_ingame = ingame;
+
+                    if ingame {
+                        let events = scanner.tick_items();
+                        push_silent_drop_events(&silent_drop_queue, events);
+                        let _ = scanner.drain_pickup_updates();
+                        let _ = scanner.drain_goblin_events();
+
+                        if !dict_published {
+                            if let Some(dict) = scanner.items_dictionary_snapshot() {
+                                if let Ok(mut guard) = items_dictionary.write() {
+                                    *guard = Some(dict.clone());
+                                }
+                                items_cache::save_items_cache(&app_handle, &dict);
+                                dict_published = true;
+                            }
+                        }
+                    }
+
+                    thread::sleep(Duration::from_millis(SILENT_COLLECTOR_TICK_MS));
+                }
+
+                is_scanning.store(false, Ordering::SeqCst);
+                game_status.store(GAME_STATUS_UNKNOWN, Ordering::SeqCst);
+                if let Err(e) = app_handle.emit("scanner-status", "stopped") {
+                    log_error(&format!("Failed to emit scanner-status stopped: {}", e));
+                }
+                if let Err(e) = app_handle.emit("game-status", "unknown") {
+                    log_error(&format!("Failed to emit game-status unknown: {}", e));
+                }
+                thread::sleep(Duration::from_millis(SILENT_COLLECTOR_ATTACH_RETRY_MS));
+            }
+        })
+        .expect("failed to spawn silent-drop-collector thread");
+    *scanner_thread.lock().unwrap() = Some(handle);
+}
+
 /// Start the scanner (internal function used by auto-start and manual start)
 fn start_scanner_internal(
     is_scanning: Arc<AtomicBool>,
@@ -158,6 +604,7 @@ fn start_scanner_internal(
     game_status: Arc<AtomicU8>,
     items_dictionary: Arc<RwLock<Option<ItemsDictionary>>>,
     loot_history: Arc<RwLock<LootHistory>>,
+    silent_drop_queue: Arc<Mutex<Vec<ItemDropEvent>>>,
     app_handle: AppHandle,
 ) {
     // Check if already running
@@ -256,8 +703,12 @@ fn start_scanner_internal(
                 (shared_state, scanner)
             };
 
+            // Disabled for safe scanner mode. The legacy marker scanner writes
+            // AutomapCell chains into the game process; if SoE moves those
+            // layouts, it can cause visual corruption. Drop/grail scanning does
+            // not depend on automap markers.
             #[cfg(target_os = "windows")]
-            let marker_handle = spawn_marker_thread(shared_state.clone());
+            let marker_handle: Option<thread::JoinHandle<()>> = None;
 
             #[cfg(not(target_os = "windows"))]
             let mut scanner = match DropScanner::new(loot_history.clone()) {
@@ -411,7 +862,8 @@ fn start_scanner_internal(
                     // `item-drop` events would wait on the marker pass and
                     // appear with noticeable lag on crowded maps.
                     let items = scanner.tick_items();
-                    for item in items {
+                    push_silent_drop_events(&silent_drop_queue, items);
+                    for item in Vec::<ItemDropEvent>::new() {
                         // Only emit loot-history-entry when the scanner
                         // actually inserted a new row (false when a
                         // dedup-merge happened — same physical item seen
@@ -463,7 +915,8 @@ fn start_scanner_internal(
                     }
 
                     // Drain pickup-state transitions and broadcast them.
-                    for (unit_id, seed, pickup) in scanner.drain_pickup_updates() {
+                    let _ = scanner.drain_pickup_updates();
+                    for (unit_id, seed, pickup) in Vec::<(u32, u32, PickupState)>::new() {
                         #[derive(serde::Serialize)]
                         struct LootHistoryUpdatePayload {
                             unit_id: u32,
@@ -559,6 +1012,7 @@ fn spawn_auto_scanner(
     game_status: Arc<AtomicU8>,
     items_dictionary: Arc<RwLock<Option<ItemsDictionary>>>,
     loot_history: Arc<RwLock<LootHistory>>,
+    silent_drop_queue: Arc<Mutex<Vec<ItemDropEvent>>>,
     app_handle: AppHandle,
 ) {
     thread::spawn(move || {
@@ -576,6 +1030,7 @@ fn spawn_auto_scanner(
                     game_status.clone(),
                     items_dictionary.clone(),
                     loot_history.clone(),
+                    silent_drop_queue.clone(),
                     app_handle.clone(),
                 );
             }
@@ -629,6 +1084,17 @@ fn clear_loot_history(state: tauri::State<AppState>, app_handle: AppHandle) -> R
         .map_err(|e| format!("Failed to emit loot-history-cleared: {}", e))
 }
 
+#[tauri::command]
+fn drain_collected_drops(state: tauri::State<AppState>) -> Vec<ItemDropEvent> {
+    let Ok(mut queue) = state.silent_drop_queue.lock() else {
+        log_error("Failed to acquire silent drop queue lock for drain");
+        return Vec::new();
+    };
+    let drained = std::mem::take(&mut *queue);
+    log_info(&format!("Drained {} silent collected drop(s)", drained.len()));
+    drained
+}
+
 // ===== Filter Configuration Commands =====
 
 /// Set the filter configuration for the scanner
@@ -665,6 +1131,13 @@ fn set_filter_enabled(_enabled: bool, state: tauri::State<AppState>) {
 fn set_verbose_filter_logging(enabled: bool, state: tauri::State<AppState>) {
     state
         .verbose_filter_logging
+        .store(enabled, Ordering::SeqCst);
+}
+
+#[tauri::command]
+fn set_zone_transition_sync_enabled(enabled: bool, state: tauri::State<AppState>) {
+    state
+        .zone_transition_sync_enabled
         .store(enabled, Ordering::SeqCst);
 }
 
@@ -1264,6 +1737,9 @@ fn sync_overlay_with_game_impl(app: &AppHandle) -> Result<(), String> {
     if hwnd_game.0.is_null() {
         return Err("Diablo II window handle is null".to_string());
     }
+    if !is_diablo2_window_alive(hwnd_game) {
+        return Err("Diablo II window is hung or its process has exited".to_string());
+    }
 
     let overlay_window = app
         .get_webview_window("overlay")
@@ -1729,16 +2205,20 @@ fn main() {
             // Shared scanner state
             let state = AppState {
                 is_scanning: Arc::new(AtomicBool::new(false)),
+                // General background-run flag. The live item scanner stays
+                // disabled; this lets lightweight watchers stop cleanly on close.
                 should_auto_scan: Arc::new(AtomicBool::new(true)),
                 filter_config: Arc::new(RwLock::new(initial_filter_config)),
                 filter_enabled: Arc::new(AtomicBool::new(false)),
                 verbose_filter_logging: Arc::new(AtomicBool::new(false)),
+                zone_transition_sync_enabled: Arc::new(AtomicBool::new(false)),
                 reveal_hidden_active: Arc::new(AtomicBool::new(false)),
                 filter_config_generation: Arc::new(AtomicU64::new(0)),
                 scanner_thread: Arc::new(Mutex::new(None)),
                 game_status: Arc::new(AtomicU8::new(GAME_STATUS_UNKNOWN)),
                 items_dictionary: Arc::new(RwLock::new(cached_items)),
                 loot_history: Arc::new(RwLock::new(LootHistory::new())),
+                silent_drop_queue: Arc::new(Mutex::new(Vec::new())),
                 grail_log_watcher: grail_log::GrailLogWatcher::new(),
                 account_stats_watcher: kill_counter::AccountStatsWatcher::new(),
             };
@@ -1747,17 +2227,40 @@ fn main() {
             let filter_config = state.filter_config.clone();
             let filter_enabled = state.filter_enabled.clone();
             let verbose_filter_logging = state.verbose_filter_logging.clone();
+            let zone_transition_sync_enabled = state.zone_transition_sync_enabled.clone();
             let reveal_hidden_active = state.reveal_hidden_active.clone();
             let filter_config_generation = state.filter_config_generation.clone();
             let scanner_thread = state.scanner_thread.clone();
+            let silent_drop_queue = state.silent_drop_queue.clone();
             let game_status = state.game_status.clone();
             let items_dictionary = state.items_dictionary.clone();
             let loot_history = state.loot_history.clone();
             app.manage(state);
 
-            // Start grail drop log watcher (reads C:\grail_drops.log written by ijl11.dll)
-            app.state::<AppState>().grail_log_watcher.start(app.handle().clone());
+            // Calm sync model: the proven scanner still watches drops, but it queues
+            // them in memory so the frontend applies one quiet batch on Save & Exit,
+            // zone-change, or Sync All.
             app.state::<AppState>().account_stats_watcher.start(app.handle().clone());
+            spawn_auto_scanner(
+                is_scanning.clone(),
+                should_auto_scan.clone(),
+                filter_config,
+                filter_enabled,
+                verbose_filter_logging.clone(),
+                reveal_hidden_active,
+                filter_config_generation,
+                scanner_thread.clone(),
+                game_status,
+                items_dictionary,
+                loot_history,
+                silent_drop_queue,
+                app.handle().clone(),
+            );
+            spawn_zone_transition_watcher(
+                should_auto_scan.clone(),
+                zone_transition_sync_enabled.clone(),
+                app.handle().clone(),
+            );
 
             // Initialize hotkey state
             let hotkey_state = HotkeyState::new();
@@ -1782,6 +2285,10 @@ fn main() {
                     );
                     verbose_filter_logging
                         .store(loaded_settings.verbose_filter_logging, Ordering::SeqCst);
+                    zone_transition_sync_enabled.store(
+                        loaded_settings.zone_transition_sync_enabled,
+                        Ordering::SeqCst,
+                    );
                 }
                 Err(e) => {
                     log_error(&format!("Failed to load settings for hotkeys: {}", e));
@@ -1798,22 +2305,8 @@ fn main() {
             app.manage(edit_mode_state);
             app.manage(muling_mode_hotkey_state);
 
-            // Spawn auto-scanner monitor
-            let app_handle = app.handle().clone();
-            spawn_auto_scanner(
-                is_scanning.clone(),
-                should_auto_scan.clone(),
-                filter_config.clone(),
-                filter_enabled.clone(),
-                verbose_filter_logging.clone(),
-                reveal_hidden_active.clone(),
-                filter_config_generation.clone(),
-                scanner_thread.clone(),
-                game_status.clone(),
-                items_dictionary.clone(),
-                loot_history.clone(),
-                app_handle,
-            );
+            // Live scanner auto-start intentionally disabled. Keeping this off
+            // avoids continuous memory reads and overlay churn while playing.
 
             // When the main window is closed, stop everything, close the overlay window
             // and terminate the application.
@@ -1899,9 +2392,11 @@ fn main() {
             get_items_dictionary,
             get_loot_history,
             clear_loot_history,
+            drain_collected_drops,
             set_filter_config,
             set_filter_enabled,
             set_verbose_filter_logging,
+            set_zone_transition_sync_enabled,
             sync_overlay_with_game,
             set_overlay_interactive,
             set_always_show_overlays,
@@ -1951,6 +2446,7 @@ fn main() {
             hotkeys::update_muling_mode_hotkey,
             kill_counter::sync_kills_all,
             kill_counter::sync_accountstats_kills,
+            kill_counter::sync_accountstats_stash,
             kill_counter::debug_accountstats_live,
             character_levels::sync_character_levels,
             updater::check_for_updates,
@@ -1964,6 +2460,7 @@ fn main() {
             drop_hook::write_drop_identified_config,
             drop_hook::get_drop_hook_status_for_path,
             drop_hook::install_drop_hook_for_path,
+            drop_hook::restore_original_ijl11_for_path,
             drop_hook::install_auto_grail_hook_for_path,
             drop_hook::install_identified_drops_hook_for_path,
             drop_hook::uninstall_auto_grail_hook_for_path,
@@ -1973,6 +2470,7 @@ fn main() {
             drop_hook::detect_project_d2_dirs,
             grail_log::read_grail_log,
             grail_log::clear_grail_log,
+            hook_log::read_hook_drop_events,
             open_app_folder,
             open_external_url,
             detect_soe_launcher_path,

@@ -39,6 +39,7 @@ import {
   type HolyGrailCategoryKey,
   type HolyGrailCategorySettings,
   type HolyGrailFoundEntry,
+  type HolyGrailItem,
   type HolyGrailItemLike,
 } from "../lib/holy-grail";
 import {
@@ -146,6 +147,17 @@ export interface FateCardBackupStatus {
 }
 
 export type { GsfPlayer, GsfWantedItem, GsfWantedStatus, GsfItemCategory, GsfItemSlot };
+
+interface LiveDropRecordInput {
+  displayName: string;
+  categories: DropTrackerCategoryKey[];
+  isNewGrail?: boolean;
+  source?: string;
+  materialAchievementName?: string | null;
+  fateCardName?: string | null;
+  trackerMaterialName?: MaterialTrackerName | null;
+  holyGrailItems: HolyGrailItem[];
+}
 
 /** Source of audio for a sound slot. */
 export type SoundSource =
@@ -259,6 +271,8 @@ export interface AppSettings {
   totalDropsTrackerCounts: DropTrackerCounts;
   /** Most recent items counted by Drops Tracker, newest first. */
   dropsTrackerRecentItems: DropTrackerRecentItem[];
+  /** Persistent hook-log event IDs that have already been applied. */
+  processedHookDropIds: string[];
   /** When true, suppress repeated sightings of the same item during a single run. */
   dropsTrackerPreventDuplicates: boolean;
   /** When true, temporarily pause drop/holy-grail tracking while muling items. */
@@ -381,6 +395,10 @@ export interface AppSettings {
   saveExitAutomationDelayMs: number;
   /** Wait after Save & Exit before clicking Single Player. */
   saveExitAutomationMainMenuWaitMs: number;
+  /** When true, a lightweight watcher syncs after Diablo II loading/zone transitions settle. */
+  zoneTransitionSyncEnabled: boolean;
+  /** One-time migration flag so old installs get zone sync enabled once but user choices persist afterward. */
+  zoneTransitionSyncDefaultedOn: boolean;
   /** When true, GSF matching and notifications are enabled. */
   gsfEnabled: boolean;
   /** When true, matched GSF drops add Needed by text to loot notifications. */
@@ -474,6 +492,7 @@ export const DEFAULT_MAIN_TAB_ORDER = [
 
 export const DEFAULT_DROPS_TRACKER_SUB_TAB_ORDER = [
   "overview",
+  "drops-hook",
   "identified-drops",
   "muling-mode",
 ];
@@ -481,7 +500,6 @@ export const DEFAULT_DROPS_TRACKER_SUB_TAB_ORDER = [
 export const DEFAULT_HOLY_GRAIL_SUB_TAB_ORDER = [
   "overview",
   "runeword-planner",
-  "import",
   "notifications",
   "backup",
 ];
@@ -576,6 +594,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   dropsTrackerCounts: emptyDropTrackerCounts(),
   totalDropsTrackerCounts: emptyDropTrackerCounts(),
   dropsTrackerRecentItems: [],
+  processedHookDropIds: [],
   dropsTrackerPreventDuplicates: false,
   dropsTrackerMulingMode: false,
   dropsTrackerMulingStartedAtMs: null,
@@ -637,6 +656,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   saveExitAutomationCoordinateModePercent: false,
   saveExitAutomationDelayMs: 300,
   saveExitAutomationMainMenuWaitMs: 10000,
+  zoneTransitionSyncEnabled: true,
+  zoneTransitionSyncDefaultedOn: true,
   gsfEnabled: true,
   gsfNotificationEnabled: true,
   gsfSoundSlot: null,
@@ -656,6 +677,8 @@ class SettingsStore {
   private _isLoaded = $state(false);
   private _isLoading = $state(false);
   private _saveTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _holyGrailBackupTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _pendingHolyGrailBackup: HolyGrailFoundMap | null = null;
   private _lastDropsTrackerTimerPersistAtMs = 0;
   /** Locally-modified-not-yet-saved keys; merged last so the overlay's drag
    *  doesn't get clobbered by the main window's stale save (and vice versa). */
@@ -705,6 +728,19 @@ class SettingsStore {
       .filter((item) => typeof item.source === "string" && item.source.trim().length > 0)
       .filter((item) => !this.isPlaceholderItemName(item.name))
       .slice(0, 20);
+  }
+
+  private normalizeProcessedHookDropIds(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const raw of value) {
+      const id = String(raw ?? "").trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+    }
+    return ids.slice(-5000);
   }
 
   private normalizeCategoryList(value: unknown): DropTrackerCategoryKey[] {
@@ -908,6 +944,10 @@ class SettingsStore {
     for (const entry of entries) {
       void emit("holy-grail-item-completed", entry);
     }
+  }
+
+  private emitHolyGrailFoundUpdated(found: HolyGrailFoundMap): void {
+    void emit("holy-grail-found-updated", JSON.parse(JSON.stringify(found)));
   }
 
   private pruneIncompleteFateCardStacks(
@@ -1114,6 +1154,9 @@ class SettingsStore {
       ),
       dropsTrackerRecentItems: this.normalizeRecentItems(
         settings.dropsTrackerRecentItems,
+      ),
+      processedHookDropIds: this.normalizeProcessedHookDropIds(
+        (settings as Partial<AppSettings>).processedHookDropIds,
       ),
       dropsTrackerRunCount: Math.max(
         0,
@@ -1362,6 +1405,13 @@ class SettingsStore {
         500,
         30000,
       ),
+      zoneTransitionSyncEnabled:
+        settings.zoneTransitionSyncDefaultedOn !== true &&
+        settings.zoneTransitionSyncEnabled === false
+          ? true
+          : settings.zoneTransitionSyncEnabled ??
+            DEFAULT_SETTINGS.zoneTransitionSyncEnabled,
+      zoneTransitionSyncDefaultedOn: true,
       gsfEnabled: settings.gsfEnabled ?? DEFAULT_SETTINGS.gsfEnabled,
       gsfNotificationEnabled:
         settings.gsfNotificationEnabled ?? DEFAULT_SETTINGS.gsfNotificationEnabled,
@@ -1604,6 +1654,13 @@ class SettingsStore {
 
   setRunewordPlannerStashPath(path: string | null): void {
     this.set("runewordPlannerStashPath", path && path.trim() ? path.trim() : null);
+  }
+
+  setZoneTransitionSyncEnabled(enabled: boolean): void {
+    this.update({
+      zoneTransitionSyncEnabled: enabled,
+      zoneTransitionSyncDefaultedOn: true,
+    });
   }
 
   setMainTabOrder(order: string[]): void {
@@ -2369,6 +2426,20 @@ class SettingsStore {
     }
   }
 
+  private scheduleHolyGrailBackup(found: HolyGrailFoundMap = this._settings.holyGrailFound): void {
+    if (Object.keys(found).length === 0) return;
+    this._pendingHolyGrailBackup = found;
+    if (this._holyGrailBackupTimeout) {
+      clearTimeout(this._holyGrailBackupTimeout);
+    }
+    this._holyGrailBackupTimeout = setTimeout(() => {
+      this._holyGrailBackupTimeout = null;
+      const pending = this._pendingHolyGrailBackup;
+      this._pendingHolyGrailBackup = null;
+      if (pending) void this.backupHolyGrailFoundNow(pending);
+    }, 1500);
+  }
+
   async backupHolyGrail(): Promise<HolyGrailBackupStatus | null> {
     try {
       return await invoke<HolyGrailBackupStatus>("backup_holy_grail_found", {
@@ -2450,8 +2521,15 @@ class SettingsStore {
       },
     };
     this.set("holyGrailFound", next);
-    void this.backupHolyGrailFoundNow(next);
+    this.scheduleHolyGrailBackup(next);
+    this.emitHolyGrailFoundUpdated(next);
     return true;
+  }
+
+  isHolyGrailDropNew(item: HolyGrailItemLike): boolean {
+    const grailItem = holyGrailItemFromDrop(item);
+    if (!grailItem || grailItem.category === "fateCards") return false;
+    return !this._settings.holyGrailFound[grailItem.key];
   }
 
   mergeHolyGrailFound(found: HolyGrailFoundMap): void {
@@ -2461,6 +2539,12 @@ class SettingsStore {
       "latest",
     );
     this.set("holyGrailFound", merged);
+  }
+
+  applyHolyGrailFoundSnapshot(found: HolyGrailFoundMap): void {
+    this.update({
+      holyGrailFound: this.normalizeHolyGrailFound(found),
+    });
   }
 
   setHolyGrailFound(
@@ -2490,7 +2574,8 @@ class SettingsStore {
           holyGrailFound: nextFound,
           fateCardDropCounts: nextDropCounts,
         });
-        void this.backupHolyGrailFoundNow(nextFound);
+        this.scheduleHolyGrailBackup(nextFound);
+        this.emitHolyGrailFoundUpdated(nextFound);
         return;
       }
     }
@@ -2506,7 +2591,8 @@ class SettingsStore {
       delete next[key];
     }
     this.set("holyGrailFound", next);
-    void this.backupHolyGrailFoundNow(next);
+    this.scheduleHolyGrailBackup(next);
+    this.emitHolyGrailFoundUpdated(next);
   }
 
   resetHolyGrail(): void {
@@ -2514,6 +2600,7 @@ class SettingsStore {
       holyGrailFound: {},
       fateCardDropCounts: {},
     });
+    this.emitHolyGrailFoundUpdated({});
   }
 
   private completedFateCardFoundEntry(name: string): HolyGrailFoundEntry | null {
@@ -2575,7 +2662,8 @@ class SettingsStore {
       holyGrailFound: nextFound,
     });
     if (foundChanged) {
-      void this.backupHolyGrailFoundNow(nextFound);
+      this.scheduleHolyGrailBackup(nextFound);
+      this.emitHolyGrailFoundUpdated(nextFound);
     }
     this.emitCompletedFateCardGrailEntries(newlyCompletedEntries);
   }
@@ -2916,6 +3004,201 @@ class SettingsStore {
         ...this._settings.dropsTrackerRecentItems,
       ].slice(0, 20),
     });
+  }
+
+  addProcessedHookDropIds(ids: string[]): void {
+    if (ids.length === 0) return;
+    this.set(
+      "processedHookDropIds",
+      this.normalizeProcessedHookDropIds([
+        ...this._settings.processedHookDropIds,
+        ...ids,
+      ]),
+    );
+  }
+
+  recordLiveDrop(input: LiveDropRecordInput): void {
+    const current = this._settings;
+    const categories = Array.from(new Set(input.categories));
+    const dropsCategories = categories.filter(
+      (category) => current.dropsTrackerCategories[category],
+    );
+    const totalCategories = categories.filter(
+      (category) => current.totalDropsTrackerCategories[category],
+    );
+    const shouldRecordDropCounts = dropsCategories.length > 0 || totalCategories.length > 0;
+    const runeName = runeNameFromDrop({ name: input.displayName });
+    const tracksUnique = categories.includes("unique") || categories.includes("hellforged");
+    const cleanName =
+      canonicalTrackedItemName(input.displayName) ||
+      cleanTrackedItemName(input.displayName) ||
+      "";
+
+    const partial: Partial<AppSettings> = {};
+    let achievementStats = normalizeAchievementStats(current.achievementStats);
+    let achievementStatsChanged = false;
+    let runeTrackerCounts = current.runeTrackerCounts;
+    let holyGrailFound = current.holyGrailFound;
+    let holyGrailFoundChanged = false;
+    let completedFateCardEntries: HolyGrailFoundEntry[] = [];
+    let achievementUnlockEntries: AchievementUnlockEntry[] = [];
+
+    if (shouldRecordDropCounts) {
+      const recentItem: DropTrackerRecentItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        timestampMs: Date.now(),
+        name: cleanName || "Unknown item",
+        isNewGrail: input.isNewGrail === true,
+        categories,
+        dropsTrackerCategories: Array.from(new Set(dropsCategories)),
+        totalDropsTrackerCategories: Array.from(new Set(totalCategories)),
+        source: input.source?.trim() || "manual",
+      };
+      partial.dropsTrackerCounts = normalizeCounts(
+        incrementCounts(
+          current.dropsTrackerCounts,
+          categories,
+          current.dropsTrackerCategories,
+        ),
+      );
+      partial.totalDropsTrackerCounts = normalizeCounts(
+        incrementCounts(
+          current.totalDropsTrackerCounts,
+          categories,
+          current.totalDropsTrackerCategories,
+        ),
+      );
+      partial.dropsTrackerRecentItems = [
+        recentItem,
+        ...current.dropsTrackerRecentItems,
+      ].slice(0, 20);
+    }
+
+    if (runeName) {
+      runeTrackerCounts = normalizeRuneTrackerCounts({
+        ...current.runeTrackerCounts,
+        [runeName]: (current.runeTrackerCounts[runeName] ?? 0) + 1,
+      });
+      partial.runeTrackerCounts = runeTrackerCounts;
+    }
+
+    if (tracksUnique) {
+      const isEliteUnique = ELITE_UNIQUE_NAMES.has(cleanName);
+      achievementStats = normalizeAchievementStats({
+        ...achievementStats,
+        uniqueItemsFound: (achievementStats.uniqueItemsFound ?? 0) + 1,
+        eliteUniqueItemsFound:
+          (achievementStats.eliteUniqueItemsFound ?? 0) + (isEliteUnique ? 1 : 0),
+        firstEliteUniqueName:
+          achievementStats.firstEliteUniqueName ??
+          (isEliteUnique ? cleanName : null),
+      });
+      achievementStatsChanged = true;
+    }
+
+    const materialName = input.materialAchievementName
+      ? materialAchievementNameFromDrop(input.materialAchievementName)
+      : null;
+    if (materialName) {
+      const key = materialAchievementKey(materialName);
+      achievementStats = normalizeAchievementStats({
+        ...achievementStats,
+        materialFinds: {
+          ...achievementStats.materialFinds,
+          [key]: (achievementStats.materialFinds[key] ?? 0) + 1,
+        },
+      });
+      achievementStatsChanged = true;
+    }
+
+    if (input.fateCardName) {
+      const card = fateCardInfo(input.fateCardName);
+      if (card) {
+        achievementStats = normalizeAchievementStats({
+          ...achievementStats,
+          fateCardsFound: (achievementStats.fateCardsFound ?? 0) + 1,
+          tier0FateCardsFound:
+            (achievementStats.tier0FateCardsFound ?? 0) + (card.tier === 0 ? 1 : 0),
+        });
+        achievementStatsChanged = true;
+
+        const nextDropCounts = this.normalizeFateCardCounts({
+          ...current.fateCardDropCounts,
+          [card.name]: (current.fateCardDropCounts[card.name] ?? 0) + 1,
+        });
+        const nextTrackerCounts = this.normalizeFateCardCounts({
+          ...current.fateCardTrackerCounts,
+          [card.name]: (current.fateCardTrackerCounts[card.name] ?? 0) + 1,
+        });
+        const nextFound = this.withCompletedFateCardStacks(holyGrailFound, nextDropCounts);
+        completedFateCardEntries = this.newlyCompletedFateCardEntries(holyGrailFound, nextFound);
+        holyGrailFoundChanged = nextFound !== holyGrailFound;
+        holyGrailFound = nextFound;
+        partial.fateCardDropCounts = nextDropCounts;
+        partial.fateCardTrackerCounts = nextTrackerCounts;
+        if (holyGrailFoundChanged) {
+          partial.holyGrailFound = nextFound;
+        }
+      }
+    }
+
+    if (input.trackerMaterialName) {
+      partial.materialTrackerCounts = normalizeMaterialTrackerCounts({
+        ...current.materialTrackerCounts,
+        [input.trackerMaterialName]:
+          (current.materialTrackerCounts[input.trackerMaterialName] ?? 0) + 1,
+      });
+    }
+
+    const progress = evaluateAchievements({
+      stats: achievementStats,
+      holyGrailFound,
+      holyGrailItems: input.holyGrailItems,
+      runeTrackerCounts,
+    });
+    const now = new Date().toISOString();
+    const newUnlocks = progress.filter(
+      (achievement) => achievement.complete && !achievementStats.unlocked[achievement.id],
+    );
+    if (newUnlocks.length > 0) {
+      achievementUnlockEntries = newUnlocks.map((achievement) => ({
+        id: achievement.id,
+        name: achievement.name,
+        category: achievement.category,
+        tier: achievement.tier,
+        unlockedAt: now,
+        detail: achievementDetail(achievement.id, {
+          stats: achievementStats,
+          holyGrailFound,
+          holyGrailItems: input.holyGrailItems,
+          runeTrackerCounts,
+        }),
+      }));
+      const unlocked = { ...achievementStats.unlocked };
+      for (const entry of achievementUnlockEntries) unlocked[entry.id] = entry.unlockedAt;
+      achievementStats = normalizeAchievementStats({
+        ...achievementStats,
+        unlocked,
+        history: [...achievementUnlockEntries, ...achievementStats.history].slice(0, 200),
+      });
+      achievementStatsChanged = true;
+    }
+
+    if (achievementStatsChanged) {
+      partial.achievementStats = achievementStats;
+    }
+
+    if (Object.keys(partial).length === 0) return;
+    this.update(partial);
+
+    if (holyGrailFoundChanged) {
+      this.scheduleHolyGrailBackup(holyGrailFound);
+      this.emitHolyGrailFoundUpdated(holyGrailFound);
+    }
+    for (const entry of achievementUnlockEntries) {
+      void emit("achievement-unlocked", entry);
+    }
+    this.emitCompletedFateCardGrailEntries(completedFateCardEntries);
   }
 
   incrementDropTrackerCounts(categories: DropTrackerCategoryKey[]): void {

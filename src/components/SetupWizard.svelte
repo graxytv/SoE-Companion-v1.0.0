@@ -17,6 +17,14 @@
     installed: boolean;
     grailInstalled: boolean;
     identifiedInstalled: boolean;
+    dllMatchesBundled: boolean;
+    managedHookPresent: boolean;
+    hookNeedsUpdate: boolean;
+    unknownDllPresent: boolean;
+    canRestoreOriginal: boolean;
+    hookVersionMatches: boolean;
+    hookVersion: string | null;
+    expectedHookVersion: string;
     projectD2Dir: string;
     projectD2DirExists: boolean;
     originalDllExists: boolean;
@@ -36,7 +44,7 @@
   type StepId =
     | 'welcome'
     | 'launcher'
-    | 'grail'
+    | 'drops-hook'
     | 'filter'
     | 'stash'
     | 'notifications'
@@ -47,7 +55,7 @@
   const steps: Array<{ id: StepId; label: string }> = [
     { id: 'welcome', label: 'Welcome' },
     { id: 'launcher', label: 'Launcher' },
-    { id: 'grail', label: 'Auto Grail Tracker' },
+    { id: 'drops-hook', label: 'Install Drops Tracker' },
     { id: 'filter', label: 'Loot Filter' },
     { id: 'stash', label: 'Shared Stash & Stats' },
     { id: 'notifications', label: 'Notifications & Sounds' },
@@ -83,7 +91,7 @@
   function statusFor(step: StepId): StepStatus {
     if (step === 'welcome' || step === 'finish') return 'optional';
     if (step === 'launcher') return settingsStore.settings.soeLauncherPath || launcherDetectedPath ? 'done' : 'needs';
-    if (step === 'grail') return hookStatus?.grailInstalled ? 'done' : 'needs';
+    if (step === 'drops-hook') return hookStatus?.grailInstalled ? 'done' : 'needs';
     if (step === 'filter') return 'optional';
     if (step === 'stash') return settingsStore.settings.runewordPlannerStashPath || stashPaths.length > 0 ? 'done' : 'needs';
     if (step === 'notifications') return settingsStore.settings.notificationOverlayEnabled ? 'done' : 'optional';
@@ -109,8 +117,9 @@
     return 'optional';
   }
 
-  function statusLabel(status: StepStatus): string {
+  function statusLabel(step: StepId, status: StepStatus): string {
     if (status === 'done') return 'Done';
+    if (step === 'drops-hook') return 'Required';
     if (status === 'needs') return 'Needs Action';
     return 'Optional';
   }
@@ -182,7 +191,7 @@
   }
 
   async function refreshHookStatus(): Promise<void> {
-    busy = 'grail-status';
+    busy = 'drops-hook-status';
     try {
       hookStatus = await invoke<DropHookStatus>('get_drop_hook_status_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
       if (!settingsStore.settings.projectD2Path && hookStatus.projectD2DirExists) {
@@ -190,14 +199,14 @@
         projectD2PathDraft = hookStatus.projectD2Dir;
       }
     } catch (error) {
-      message = `Could not check Auto Grail Tracker: ${error}`;
+      message = `Could not check Drops Tracker Hook: ${error}`;
     } finally {
       busy = '';
     }
   }
 
   async function detectProjectD2Folder(): Promise<void> {
-    busy = 'grail-detect';
+    busy = 'drops-hook-detect';
     message = 'Searching common ProjectD2 folders...';
     try {
       const paths = await invoke<string[]>('detect_project_d2_dirs');
@@ -229,10 +238,10 @@
   }
 
   async function installHook(): Promise<void> {
-    busy = 'grail-install';
-    message = 'Installing Auto Grail Tracker...';
+    busy = 'drops-hook-install';
+    message = hookStatus?.hookNeedsUpdate ? 'Updating Drops Tracker Hook...' : 'Installing Drops Tracker Hook...';
     try {
-      hookStatus = await invoke<DropHookStatus>('install_auto_grail_hook_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
+      hookStatus = await invoke<DropHookStatus>('install_drop_hook_for_path', { projectD2Dir: settingsStore.settings.projectD2Path });
       if (!settingsStore.settings.projectD2Path && hookStatus.projectD2DirExists) {
         settingsStore.setProjectD2Path(hookStatus.projectD2Dir);
         projectD2PathDraft = hookStatus.projectD2Dir;
@@ -244,6 +253,28 @@
     } finally {
       busy = '';
     }
+  }
+
+  function hookStatusLabel(): string {
+    if (!hookStatus) return 'Checking';
+    if (hookStatus.hookNeedsUpdate) return 'Update Required';
+    if (hookStatus.unknownDllPresent) return 'Unknown ijl11.dll';
+    if (hookStatus.grailInstalled) return 'Installed';
+    return 'Not Installed';
+  }
+
+  function installHookButtonLabel(): string {
+    if (hookStatus?.hookNeedsUpdate) return 'Update Drops Tracker Hook';
+    if (hookStatus?.unknownDllPresent) return 'Replace with Drops Tracker Hook';
+    if (hookStatus?.grailInstalled) return 'Installed';
+    return 'Install Drops Tracker Hook';
+  }
+
+  function hookDetailsMessage(): string {
+    if (!hookStatus) return 'Checking status...';
+    if (hookStatus.hookNeedsUpdate) return 'Drops Tracker Hook needs an update for this app version.';
+    if (hookStatus.unknownDllPresent) return hookStatus.message;
+    return hookStatus.message;
   }
 
   async function copyFilterText(): Promise<void> {
@@ -353,6 +384,11 @@
   }
 
   function finish(): void {
+    if (!hookStatus?.grailInstalled) {
+      activeStep = 'drops-hook';
+      message = 'Install Drops Tracker Hook before finishing setup.';
+      return;
+    }
     settingsStore.set('setupWizardCompleted', true);
     onClose();
   }
@@ -393,7 +429,7 @@
             onclick={() => { activeStep = step.id; message = ''; }}
           >
             <span>{step.label}</span>
-            <small class={status}>{statusLabel(status)}</small>
+            <small class={status}>{statusLabel(step.id, status)}</small>
           </button>
         {/each}
       </nav>
@@ -412,7 +448,7 @@
         {#if activeStep === 'welcome'}
           <div class="intro-panel">
             <h3>Let’s get SoE Companion ready.</h3>
-            <p>This wizard checks the launcher, grail tracker, filters, shared stash, notifications, overlays, and the new-game automation. Nothing risky is installed or changed unless you press the button for that step.</p>
+            <p>This wizard checks the launcher, required drops tracker hook, filters, shared stash, notifications, overlays, and the new-game automation. Nothing risky is installed or changed unless you press the button for that step.</p>
             <div class="fresh-run-note">
               <strong>Best used on a fresh run.</strong>
               <span>SoE Companion only reads local character and shared-stash data; it does not modify <code>pd2_shared.stash</code>. If you manually change your <code>Diablo II\Save</code> folder for a fresh run, back it up first, including all character files and <code>pd2_shared.stash</code>.</span>
@@ -432,19 +468,20 @@
               </div>
             </div>
           </div>
-        {:else if activeStep === 'grail'}
+        {:else if activeStep === 'drops-hook'}
           <div class="step-grid">
             <div class="step-card">
-              <h3>Auto Grail Tracker</h3>
-              <p>Installs the SoE `ijl11.dll` drop hook so unique, set, hellforged, and identified inventory discoveries can feed the grail tracker.</p>
+              <h3>Install Drops Tracker</h3>
+              <p>Installs the required SoE <code>ijl11.dll</code> drop hook so drops can feed the Drops Tracker, Holy Grail, Fate Cards, materials, runes, sounds, and overlays.</p>
               <div class="status-card" class:good={hookStatus?.grailInstalled}>
-                <strong>{hookStatus?.grailInstalled ? 'Installed' : 'Not Installed'}</strong>
-                <span>{hookStatus?.message ?? 'Checking status...'}</span>
+                <strong>{hookStatusLabel()}</strong>
+                <span>{hookDetailsMessage()}</span>
               </div>
               <div class="hook-details">
                 <span>ProjectD2 folder: {hookStatus?.projectD2DirExists ? 'Found' : 'Missing'}</span>
                 <span>Original backup: {hookStatus?.originalDllExists ? 'Found' : 'Missing'}</span>
                 <span>Config: {hookStatus?.iniExists ? 'Found' : 'Missing'}</span>
+                <span>Hook version: {hookStatus?.hookVersionMatches ? 'Current' : `Expected ${hookStatus?.expectedHookVersion ?? '-'}`}</span>
               </div>
               <div class="wizard-path-picker">
                 <label>
@@ -461,10 +498,10 @@
                   <Button variant="primary" size="sm" disabled={busy !== ''} onclick={async () => { settingsStore.setProjectD2Path(projectD2PathDraft); await refreshHookStatus(); }}>Use Folder</Button>
                 </div>
               </div>
-              <p class="warning">Close Diablo II before installing. If Windows blocks Program Files writes, run SoE Companion as administrator.</p>
+              <p class="warning">Required. Close Diablo II before installing. If Windows blocks Program Files writes, run SoE Companion as administrator.</p>
               <div class="action-row">
                 <Button variant="secondary" size="sm" disabled={busy !== ''} onclick={refreshHookStatus}>Refresh</Button>
-                <Button variant="primary" size="sm" disabled={busy !== '' || hookStatus?.grailInstalled} onclick={installHook}>Install Auto Grail Tracker</Button>
+                <Button variant="primary" size="sm" disabled={busy !== '' || (hookStatus?.grailInstalled && !hookStatus?.hookNeedsUpdate)} onclick={installHook}>{installHookButtonLabel()}</Button>
               </div>
             </div>
           </div>
@@ -663,7 +700,7 @@
             <div class="summary-list">
               {#each steps.filter((step) => step.id !== 'welcome' && step.id !== 'finish') as step}
                 {@const status = statusFor(step.id)}
-                <div><span>{step.label}</span><strong class={status}>{statusLabel(status)}</strong></div>
+                <div><span>{step.label}</span><strong class={status}>{statusLabel(step.id, status)}</strong></div>
               {/each}
             </div>
             <Button variant="primary" onclick={finish}>Finish Setup</Button>

@@ -1,4 +1,5 @@
 import type { ItemsDictionary } from "../stores/items-dictionary.svelte";
+import uniquesJson from "../../public/soe-wiki-cache/data/Uniques.json";
 import {
   STATIC_SET_ITEMS,
   STATIC_HELLFORGED_UNIQUE_ITEMS,
@@ -71,6 +72,13 @@ export interface HolyGrailItemLike {
   isHellforged?: boolean | null;
   is_runeword?: boolean | null;
   isRuneword?: boolean | null;
+}
+
+interface WikiUniqueItem {
+  displayName?: string | null;
+  index?: string | null;
+  code?: string | null;
+  hellforged?: boolean | null;
 }
 
 export function holyGrailCategoryLabel(key: HolyGrailCategoryKey): string {
@@ -211,13 +219,71 @@ const CODE_ONLY_GRAIL_UNIQUES: Record<string, string> = {
   rkey: "Skeleton Key",
 };
 
+let unambiguousUniqueGrailItemsByCategoryAndCode: Map<string, HolyGrailItem | null> | null = null;
+
 function normalizedItemCode(item: HolyGrailItemLike): string {
   return String(item.item_code || item.itemCode || "").trim().toLowerCase();
 }
 
+function itemLooksUnique(item: HolyGrailItemLike): boolean {
+  return String(item.quality ?? "").trim().toLowerCase() === "unique";
+}
+
+function itemLooksHellforged(item: HolyGrailItemLike): boolean {
+  return item.is_hellforged === true ||
+    item.isHellforged === true ||
+    /\bhellforged\b/i.test(String(item.name ?? "")) ||
+    /\bhellforged\b/i.test(String(item.canonical_name ?? item.canonicalName ?? ""));
+}
+
+function uniqueGrailCodeLookup(): Map<string, HolyGrailItem | null> {
+  if (unambiguousUniqueGrailItemsByCategoryAndCode) {
+    return unambiguousUniqueGrailItemsByCategoryAndCode;
+  }
+
+  const namesByCategoryAndCode = new Map<string, Set<string>>();
+  for (const unique of uniquesJson as WikiUniqueItem[]) {
+    const code = String(unique.code ?? "").trim().toLowerCase();
+    const displayName = String(unique.displayName || unique.index || "").trim();
+    if (!code || !displayName) continue;
+
+    const category: HolyGrailCategoryKey = unique.hellforged ? "ssu" : "su";
+    const item = canonicalHolyGrailItem(category, displayName);
+    if (!item) continue;
+
+    const key = `${category}:${code}`;
+    const set = namesByCategoryAndCode.get(key) ?? new Set<string>();
+    set.add(item.name);
+    namesByCategoryAndCode.set(key, set);
+  }
+
+  unambiguousUniqueGrailItemsByCategoryAndCode = new Map();
+  for (const [key, names] of namesByCategoryAndCode) {
+    if (names.size !== 1) {
+      unambiguousUniqueGrailItemsByCategoryAndCode.set(key, null);
+      continue;
+    }
+
+    const [category] = key.split(":") as [HolyGrailCategoryKey, string];
+    const [name] = [...names];
+    unambiguousUniqueGrailItemsByCategoryAndCode.set(
+      key,
+      canonicalHolyGrailItem(category, name),
+    );
+  }
+
+  return unambiguousUniqueGrailItemsByCategoryAndCode;
+}
+
 function codeOnlyGrailUnique(item: HolyGrailItemLike): HolyGrailItem | null {
-  const name = CODE_ONLY_GRAIL_UNIQUES[normalizedItemCode(item)];
-  return name ? canonicalHolyGrailItem("su", name) : null;
+  const code = normalizedItemCode(item);
+  const manualName = CODE_ONLY_GRAIL_UNIQUES[code];
+  if (manualName) return canonicalHolyGrailItem("su", manualName);
+
+  if (!code || !itemLooksUnique(item)) return null;
+
+  const category: HolyGrailCategoryKey = itemLooksHellforged(item) ? "ssu" : "su";
+  return uniqueGrailCodeLookup().get(`${category}:${code}`) ?? null;
 }
 
 function codeOnlyRune(item: HolyGrailItemLike): HolyGrailItem | null {

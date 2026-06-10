@@ -116,6 +116,20 @@
   </div>
 
   <div class="settings-section">
+    <h2 class="section-title">Sync Behavior</h2>
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-label">Sync on Zone Change</span>
+        <span class="setting-hint">After portals, waypoints, stairs, or loading transitions settle, run the same quiet sync as Save & Exit.</span>
+      </div>
+      <Toggle
+        checked={settingsStore.settings.zoneTransitionSyncEnabled}
+        onchange={(enabled) => settingsStore.setZoneTransitionSyncEnabled(enabled)}
+      />
+    </div>
+  </div>
+
+  <div class="settings-section">
     <h2 class="section-title">Hotkeys</h2>
 
     {#each HOTKEY_ROWS as row (row.id)}
