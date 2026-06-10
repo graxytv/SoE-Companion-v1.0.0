@@ -769,15 +769,26 @@ pub fn install_auto_grail_hook_for_path(
         write_ini_with_drop_identified_config(&ini, &DropIdentifiedConfig::default())?;
     }
     write_ini_with_auto_grail_enabled(&ini, true)?;
+    let identified_enabled = read_drop_identified_config_from_path(&ini)?.enabled;
 
     Ok(build_status(
         project_d2_dir,
         if previous_status.hook_needs_update {
-            "Drops Tracker Hook updated for this app version. Identified Drops were left unchanged.".to_string()
+            if identified_enabled {
+                "Drops Tracker Hook updated for this app version. Identified Drops remain enabled.".to_string()
+            } else {
+                "Drops Tracker Hook updated for this app version. Identified Drops remain off.".to_string()
+            }
         } else if previous_status.unknown_dll_present {
-            "Unknown ijl11.dll backed up and Drops Tracker Hook installed. Identified Drops were left off.".to_string()
+            if identified_enabled {
+                "Unknown ijl11.dll backed up and Drops Tracker Hook installed. Identified Drops remain enabled.".to_string()
+            } else {
+                "Unknown ijl11.dll backed up and Drops Tracker Hook installed. Identified Drops remain off.".to_string()
+            }
+        } else if identified_enabled {
+            "Drops Tracker Hook installed. Identified Drops remain enabled.".to_string()
         } else {
-            "Drops Tracker Hook installed. Identified Drops were left off.".to_string()
+            "Drops Tracker Hook installed. Identified Drops remain off.".to_string()
         },
     ))
 }
