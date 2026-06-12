@@ -1,6 +1,6 @@
 //! Grail drop log watcher for SoE Companion
 //!
-//! Watches C:\grail_drops.log (written by the ijl11.dll hook)
+//! Watches C:\SoECompanion\logs\grail_drops.log (written by the ijl11.dll hook)
 //! and emits "grail-drop" events to the frontend whenever a new
 //! unique or set item is appended.
 //!
@@ -17,6 +17,23 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
+
+const GRAIL_LOG_PATH: &str = r"C:\SoECompanion\logs\grail_drops.log";
+const LEGACY_GRAIL_LOG_PATH: &str = r"C:\grail_drops.log";
+
+fn grail_log_path_for_read() -> PathBuf {
+    let current = PathBuf::from(GRAIL_LOG_PATH);
+    if current.exists() {
+        current
+    } else {
+        let legacy = PathBuf::from(LEGACY_GRAIL_LOG_PATH);
+        if legacy.exists() {
+            legacy
+        } else {
+            current
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,7 +57,7 @@ impl GrailLogWatcher {
     pub fn start(&self, app: AppHandle) {
         let stop = self.stop.clone();
         thread::spawn(move || {
-            let log_path = PathBuf::from(r"C:\grail_drops.log");
+            let log_path = grail_log_path_for_read();
             let mut last_pos: u64 = 0;
 
             // If file exists, start from end so we don't replay old entries on startup
@@ -128,7 +145,7 @@ impl Default for GrailLogWatcher {
 /// Used to import drops from a previous session.
 #[tauri::command]
 pub fn read_grail_log() -> Vec<GrailDropEvent> {
-    let log_path = PathBuf::from(r"C:\grail_drops.log");
+    let log_path = grail_log_path_for_read();
     let file = match File::open(&log_path) {
         Ok(f) => f,
         Err(_) => return vec![],
@@ -156,6 +173,6 @@ pub fn read_grail_log() -> Vec<GrailDropEvent> {
 /// Tauri command: clear the grail log file.
 #[tauri::command]
 pub fn clear_grail_log() -> Result<(), String> {
-    let log_path = PathBuf::from(r"C:\grail_drops.log");
+    let log_path = grail_log_path_for_read();
     std::fs::write(&log_path, "").map_err(|e| e.to_string())
 }

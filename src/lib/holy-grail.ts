@@ -473,12 +473,13 @@ export function mergeFoundIntoHolyGrailItems(
 export function inferHolyGrailCategory(
   item: HolyGrailItemLike,
 ): HolyGrailCategoryKey | null {
+  // Runewords are intentionally manual-only. The hook cannot reliably resolve
+  // completed runeword names without false positives from loaded/generated items.
+  if (itemLooksRuneword(item)) return null;
   if (codeOnlyGrailUnique(item)) return "su";
   if (codeOnlyRune(item)) return "runes";
   if (codeOnlyFateCard(item)) return "fateCards";
-  if (itemLooksRuneword(item)) return "runewords";
   const quality = (item.quality ?? "").toLowerCase();
-  if (quality === "runeword") return "runewords";
   if (quality === "set") return "sets";
 
   const name = cleanTrackedItemName(
@@ -506,6 +507,7 @@ export function inferHolyGrailCategory(
 export function holyGrailItemFromDrop(
   item: HolyGrailItemLike,
 ): HolyGrailItem | null {
+  if (itemLooksRuneword(item)) return null;
   const byCode = codeOnlyGrailUnique(item);
   if (byCode) return byCode;
   const runeByCode = codeOnlyRune(item);
@@ -517,21 +519,13 @@ export function holyGrailItemFromDrop(
   if (soe13GrailByCode) return soe13GrailByCode;
 
   const category = inferHolyGrailCategory(item);
-  const candidates = itemLooksRuneword(item)
-    ? [
-        item.name,
-        item.canonical_name,
-        item.canonicalName,
-        item.base_name,
-        item.baseName,
-      ]
-    : [
-        item.canonical_name,
-        item.canonicalName,
-        item.name,
-        item.base_name,
-        item.baseName,
-      ];
+  const candidates = [
+    item.canonical_name,
+    item.canonicalName,
+    item.name,
+    item.base_name,
+    item.baseName,
+  ];
 
   for (const candidate of candidates) {
     const match = canonicalHolyGrailItem(category, cleanTrackedItemName(candidate));

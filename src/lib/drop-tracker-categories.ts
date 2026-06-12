@@ -31,7 +31,6 @@ export const DROP_TRACKER_CATEGORIES = [
   { key: "lowRune", label: "Low Rune" },
   { key: "midRune", label: "Mid Rune" },
   { key: "highRune", label: "High Rune" },
-  { key: "runewords", label: "Runeword" },
   { key: "charm", label: "Charm" },
   { key: "jewel", label: "Jewel" },
   { key: "perfectGem", label: "Perfect Gem" },
@@ -177,10 +176,9 @@ export function defaultDropsTrackerCategories(): DropTrackerCategorySettings {
   return Object.fromEntries(
     DROP_TRACKER_CATEGORIES.map((category) => [
       category.key,
-      category.key === "unique" ||
+        category.key === "unique" ||
         category.key === "hellforged" ||
         category.key === "sets" ||
-        category.key === "runewords" ||
         category.key === "fateCard",
     ]),
   ) as DropTrackerCategorySettings;
@@ -246,10 +244,6 @@ export function categorizeDrop(
   }
 
   if (quality === "set") categories.push("sets");
-  if (item.is_runeword === true || item.isRuneword === true || quality === "runeword") {
-    categories.push("runewords");
-  }
-
   const rune = runeNameFromDrop(item);
   if (rune) categories.push(runeCategory(rune));
 

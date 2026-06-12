@@ -13,7 +13,7 @@
  *      items drop already identified (controlled by DropIdentified.ini).
  *   2. Grail Logger: when a unique or set item drops, looks up its name via
  *      D2Common.sgptDataTables -> UniqueItemsTxt / SetItemsTxt -> GetStringById
- *      and appends "ItemName|quality\n" to C:\grail_drops.log.
+ *      and appends "ItemName|quality\n" to C:\SoECompanion\logs\grail_drops.log.
  *      The SoE Companion web tool can import this log to auto-check grail items.
  *
  * All offsets confirmed against SoE's actual D2Common.dll and D2Lang.dll (May 2026).
@@ -28,6 +28,25 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
+
+static const char* SOE_COMPANION_ROOT_DIR = "C:\\SoECompanion";
+static const char* SOE_COMPANION_LOG_DIR = "C:\\SoECompanion\\logs";
+static const char* SOE_HOOK_DROP_LOG_PATH = "C:\\SoECompanion\\logs\\soe_companion_drops.log";
+static const char* SOE_GRAIL_LOG_PATH = "C:\\SoECompanion\\logs\\grail_drops.log";
+static const char* SOE_MATERIALS_TRACE_LOG_PATH = "C:\\SoECompanion\\logs\\soe_materials_trace.log";
+static const char* SOE_PGAME_DIAG_LOG_PATH = "C:\\SoECompanion\\logs\\soe_pgame_postload_diag.log";
+
+static void EnsureSoECompanionLogDir()
+{
+    CreateDirectoryA(SOE_COMPANION_ROOT_DIR, nullptr);
+    CreateDirectoryA(SOE_COMPANION_LOG_DIR, nullptr);
+}
+
+static FILE* OpenSoECompanionLogFile(const char* path, const char* mode)
+{
+    EnsureSoECompanionLogDir();
+    return fopen(path, mode);
+}
 
 // ── Proxy exports ─────────────────────────────────────────────────────────────
 static HMODULE g_orig = nullptr;
@@ -109,6 +128,7 @@ static const uintptr_t UNIT_TYPE     = 0x00;
 static const uintptr_t UNIT_CLASS    = 0x04;
 static const uintptr_t UNIT_ID       = 0x0C;
 static const uintptr_t UNIT_MODE     = 0x10;
+static const uint32_t ITEM_MODE_ON_GROUND = 3;
 static const uintptr_t UNIT_ITEMDATA = 0x14;
 
 // ItemData offsets
@@ -643,17 +663,7 @@ static void DescribeAddressTrace(uintptr_t addr, char* out, size_t outSize)
 
 static void AppendMaterialsTraceLine(const char* fmt, ...)
 {
-    char logPath[MAX_PATH] = {};
-    DWORD n = GetEnvironmentVariableA("APPDATA", logPath, MAX_PATH);
-    if (n > 0 && n < MAX_PATH) {
-        strncat(logPath, "\\com.soecompanion.app", MAX_PATH - strlen(logPath) - 1);
-        CreateDirectoryA(logPath, nullptr);
-        strncat(logPath, "\\soe_materials_trace.log", MAX_PATH - strlen(logPath) - 1);
-    } else {
-        GetTempPathA(MAX_PATH, logPath);
-        strncat(logPath, "soe_materials_trace.log", MAX_PATH - strlen(logPath) - 1);
-    }
-    FILE* f = fopen(logPath, "a");
+    FILE* f = OpenSoECompanionLogFile(SOE_MATERIALS_TRACE_LOG_PATH, "a");
     if (!f) return;
 
     SYSTEMTIME st;
@@ -7633,7 +7643,7 @@ static bool TryResolveItemDisplayName(uintptr_t pUnit, char* outName, size_t out
 static void FlushHookDropEventLines(std::vector<std::string>& lines)
 {
     if (lines.empty()) return;
-    FILE* f = fopen("C:\\soe_companion_drops.log", "a");
+    FILE* f = OpenSoECompanionLogFile(SOE_HOOK_DROP_LOG_PATH, "a");
     if (!f) return;
     for (const std::string& line : lines) {
         fwrite(line.data(), 1, line.size(), f);
@@ -7699,6 +7709,7 @@ static void AppendHookDropEvent(uintptr_t pUnit, uint32_t quality, uint32_t flag
     uint32_t itemClass = *(uint32_t*)(pUnit + UNIT_CLASS);
     uint32_t unitId = *(uint32_t*)(pUnit + UNIT_ID);
     uint32_t mode = *(uint32_t*)(pUnit + UNIT_MODE);
+    if (mode != ITEM_MODE_ON_GROUND) return;
     uint32_t seed = 0;
     if (!IsBadReadPtr((void*)(pItemData + ITEM_SEED), 4)) {
         seed = *(uint32_t*)(pItemData + ITEM_SEED);
@@ -7749,9 +7760,7 @@ static void AppendGrailLog(const char* itemName, uint32_t quality)
         quality == QUALITY_SET    ? "set"    :
         quality == QUALITY_RARE   ? "rare"   : "magic";
 
-    static const char logPath[] = "C:\\grail_drops.log";
-
-    FILE* f = fopen(logPath, "a");
+    FILE* f = OpenSoECompanionLogFile(SOE_GRAIL_LOG_PATH, "a");
     if (!f) return;
     fprintf(f, "%s|%s\n", itemName, qualStr);
     fclose(f);
@@ -7816,9 +7825,9 @@ static void __stdcall HookSetItemFlag(uintptr_t pUnit, uint32_t flagMask, int en
         }
     }
 
-    if (flagMask == IFLAG_RUNEWORD && (flags & IFLAG_RUNEWORD)) {
-        AppendHookDropEvent(pUnit, quality, flags, "runeword", true);
-    }
+    // Runewords are manual-only in SoE Companion. This flag can fire while
+    // existing/generated items are loaded, and the base-code fallback produces
+    // unreliable names, so do not emit structured drop events for runewords.
 }
 
 // ── IAT Hook setup ────────────────────────────────────────────────────────────
@@ -7884,7 +7893,7 @@ static void SetupGrailLogger()
 #ifdef SOE_PGAME_DIAG
 static void AppendDiagLine(const char* fmt, ...)
 {
-    FILE* f = fopen("C:\\soe_pgame_postload_diag.log", "a");
+    FILE* f = OpenSoECompanionLogFile(SOE_PGAME_DIAG_LOG_PATH, "a");
     if (!f) return;
 
     SYSTEMTIME st;
@@ -10085,9 +10094,8 @@ static DWORD WINAPI NativeClientLeaveHotkeyThread(LPVOID)
 
 static void WriteLogHeader()
 {
-    static const char logPath[] = "C:\\grail_drops.log";
     // Write a session separator so the import tool can see separate sessions
-    FILE* f = fopen(logPath, "a");
+    FILE* f = OpenSoECompanionLogFile(SOE_GRAIL_LOG_PATH, "a");
     if (!f) return;
     SYSTEMTIME st;
     GetLocalTime(&st);

@@ -1010,7 +1010,6 @@
     if (grailItem?.category === 'su') return ['unique'];
     if (grailItem?.category === 'ssu') return ['hellforged'];
     if (grailItem?.category === 'sets') return ['sets'];
-    if (grailItem?.category === 'runewords') return ['runewords'];
     if (grailItem?.category === 'fateCards') return ['fateCard'];
     if (grailItem?.category === 'hatredOrbs') return ['hatredOrb'];
     if (grailItem?.category === 'essences') return ['essence'];
@@ -1023,6 +1022,7 @@
 
   function recordTrackerDrop(item: ItemDrop, isNewGrailItem = false) {
     if (dropsTrackerMulingMode) return;
+    if (item.is_runeword || item.isRuneword || String(item.quality ?? '').trim().toLowerCase() === 'runeword') return;
 
     const categories = trackingCategoriesForDrop(item);
     const exactNameTrusted = hasTrustedExactUniqueSetName(item);
@@ -1069,6 +1069,7 @@
 
   function recordHolyGrailDrop(item: ItemDrop): boolean {
     if (dropsTrackerMulingMode) return false;
+    if (item.is_runeword || item.isRuneword || String(item.quality ?? '').trim().toLowerCase() === 'runeword') return false;
     if (!holyGrailItemFromDrop(item)) return false;
     if (!hasTrustedExactUniqueSetName(item)) return false;
     const isNewGrailItem = settingsStore.recordHolyGrailDrop(item);

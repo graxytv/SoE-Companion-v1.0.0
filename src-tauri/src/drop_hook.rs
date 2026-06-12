@@ -6,8 +6,8 @@ const PROJECT_D2_DIR: &str = r"C:\Program Files (x86)\Diablo II\ProjectD2";
 const DLL_NAME: &str = "ijl11.dll";
 const ORIGINAL_DLL_NAME: &str = "ijl11_orig.dll";
 const INI_NAME: &str = "DropIdentified.ini";
-const LOG_PATH: &str = r"C:\grail_drops.log";
-const DROP_HOOK_VERSION: &str = "drop-events-v2";
+const LOG_PATH: &str = r"C:\SoECompanion\logs\soe_companion_drops.log";
+const DROP_HOOK_VERSION: &str = "drop-events-v5";
 
 const BUNDLED_DLL: &[u8] = include_bytes!("../resources/ijl11.dll");
 const BUNDLED_INI: &str = include_str!("../resources/DropIdentified.ini");

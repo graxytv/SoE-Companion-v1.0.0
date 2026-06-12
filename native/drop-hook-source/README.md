@@ -13,7 +13,7 @@ After building, copy `build\ijl11.dll` to `src-tauri\resources\ijl11.dll`
 before compiling the Tauri app.
 
 The proxy preserves the existing DropIdentified and Auto Grail behavior, and now
-also writes structured drop events to `C:\soe_companion_drops.log`. SoE
+also writes structured drop events to `C:\SoECompanion\logs\soe_companion_drops.log`. SoE
 Companion consumes that JSONL file through `read_hook_drop_events` and applies
 events through the same tracker path as normal scanner drops.
 

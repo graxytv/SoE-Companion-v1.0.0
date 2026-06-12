@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::notifier::ItemDropEvent;
 
-const HOOK_DROP_LOG_PATH: &str = r"C:\soe_companion_drops.log";
+const HOOK_DROP_LOG_PATH: &str = r"C:\SoECompanion\logs\soe_companion_drops.log";
+const LEGACY_HOOK_DROP_LOG_PATH: &str = r"C:\soe_companion_drops.log";
 const MAX_HOOK_LOG_INITIAL_TAIL_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_HOOK_LOG_READ_BYTES: u64 = 1024 * 1024;
 const MAX_HOOK_LOG_LINES_PER_SYNC: usize = 5_000;
@@ -43,6 +44,20 @@ pub struct HookDropCompactResult {
     pub old_length: u64,
     pub new_length: u64,
     pub compacted: bool,
+}
+
+fn hook_drop_log_path_for_read() -> PathBuf {
+    let current = PathBuf::from(HOOK_DROP_LOG_PATH);
+    if current.exists() {
+        current
+    } else {
+        let legacy = PathBuf::from(LEGACY_HOOK_DROP_LOG_PATH);
+        if legacy.exists() {
+            legacy
+        } else {
+            current
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -259,6 +274,19 @@ fn into_item_drop(line: HookDropLogLine) -> ItemDropEvent {
     }
 }
 
+fn hook_line_is_runeword(line: &HookDropLogLine) -> bool {
+    line.is_runeword.unwrap_or(false)
+        || line
+            .quality
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|quality| quality.eq_ignore_ascii_case("runeword"))
+}
+
+fn hook_line_is_ground_drop(line: &HookDropLogLine) -> bool {
+    line.mode == Some(3)
+}
+
 trait IfEmpty {
     fn if_empty(self, fallback: &str) -> String;
 }
@@ -274,8 +302,12 @@ impl IfEmpty for String {
 }
 
 #[tauri::command]
-pub fn read_hook_drop_events(processed_ids: Vec<String>, cursor: Option<u64>) -> HookDropEventsResult {
-    let path = PathBuf::from(HOOK_DROP_LOG_PATH);
+pub fn read_hook_drop_events(
+    processed_ids: Vec<String>,
+    cursor: Option<u64>,
+    skip_existing: Option<bool>,
+) -> HookDropEventsResult {
+    let path = hook_drop_log_path_for_read();
     let processed: HashSet<String> = processed_ids
         .into_iter()
         .map(|id| id.trim().to_string())
@@ -303,6 +335,22 @@ pub fn read_hook_drop_events(processed_ids: Vec<String>, cursor: Option<u64>) ->
 
     let log_length = file.metadata().map(|metadata| metadata.len()).unwrap_or(0);
     let requested_cursor = cursor.unwrap_or(0);
+    if skip_existing.unwrap_or(false) && requested_cursor == 0 && log_length > 0 {
+        return HookDropEventsResult {
+            log_path: path.display().to_string(),
+            events: Vec::new(),
+            event_ids: Vec::new(),
+            lines_read: 0,
+            skipped_processed: 0,
+            parse_errors: 0,
+            cursor_before: log_length,
+            cursor_after: log_length,
+            log_length,
+            reached_limit: false,
+            skipped_backlog_bytes: log_length,
+        };
+    }
+
     let mut cursor_before = if requested_cursor > log_length {
         0
     } else {
@@ -384,6 +432,12 @@ pub fn read_hook_drop_events(processed_ids: Vec<String>, cursor: Option<u64>) ->
                 continue;
             }
         };
+        if hook_line_is_runeword(&parsed) {
+            continue;
+        }
+        if !hook_line_is_ground_drop(&parsed) {
+            continue;
+        }
         let event_id = hook_event_id(&parsed, trimmed);
         if processed.contains(&event_id) {
             skipped_processed += 1;
@@ -411,7 +465,7 @@ pub fn read_hook_drop_events(processed_ids: Vec<String>, cursor: Option<u64>) ->
 
 #[tauri::command]
 pub fn compact_hook_drop_log(cursor: u64) -> HookDropCompactResult {
-    let path = PathBuf::from(HOOK_DROP_LOG_PATH);
+    let path = hook_drop_log_path_for_read();
     let log_path = path.display().to_string();
     let old_length = match std::fs::metadata(&path) {
         Ok(metadata) => metadata.len(),

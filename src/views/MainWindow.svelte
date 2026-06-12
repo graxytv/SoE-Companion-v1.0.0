@@ -392,7 +392,6 @@
         if (grailItem?.category === "su") return ["unique"];
         if (grailItem?.category === "ssu") return ["hellforged"];
         if (grailItem?.category === "sets") return ["sets"];
-        if (grailItem?.category === "runewords") return ["runewords"];
         if (grailItem?.category === "fateCards") return ["fateCard"];
         if (grailItem?.category === "hatredOrbs") return ["hatredOrb"];
         if (grailItem?.category === "essences") return ["essence"];
@@ -408,6 +407,9 @@
         holyGrailItems = buildHolyGrailItems(itemsDictionaryStore.dict),
     ): CollectedDropRecordResult {
         if (settingsStore.settings.dropsTrackerMulingMode) return { applied: false };
+        if (item.is_runeword || item.isRuneword || String(item.quality ?? "").trim().toLowerCase() === "runeword") {
+            return { applied: false };
+        }
 
         const identifyInventoryEvent = isIdentifyInventoryEvent(item);
         const grailDropItem = holyGrailItemFromDrop(item);
@@ -495,10 +497,30 @@
             return await invoke<HookDropEventsResult>("read_hook_drop_events", {
                 processedIds: settingsStore.settings.processedHookDropIds,
                 cursor: settingsStore.settings.hookDropLogCursor,
+                skipExisting: false,
             });
         } catch (error) {
             console.warn(`[MainWindow] Failed to read hook drop events for ${reason}:`, error);
             return null;
+        }
+    }
+
+    async function baselineHookDropLogCursor(): Promise<void> {
+        if (settingsStore.settings.hookDropLogCursor > 0) return;
+        try {
+            const result = await invoke<HookDropEventsResult>("read_hook_drop_events", {
+                processedIds: [],
+                cursor: 0,
+                skipExisting: true,
+            });
+            if (result.cursorAfter > 0) {
+                settingsStore.setHookDropLogCursor(result.cursorAfter);
+                console.info(
+                    `[MainWindow] Hook drop log baselined at ${result.cursorAfter} bytes; existing backlog was not imported.`,
+                );
+            }
+        } catch (error) {
+            console.warn("[MainWindow] Failed to baseline hook drop log cursor:", error);
         }
     }
 
@@ -765,6 +787,7 @@
 
         restoreWindowState();
         itemsDictionaryStore.init();
+        void baselineHookDropLogCursor();
 
         // Scanner / game status (kept for overlay compatibility)
         listen<string>("scanner-status", (event) => {

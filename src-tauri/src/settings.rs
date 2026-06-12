@@ -787,7 +787,6 @@ const DROP_TRACKER_CATEGORY_KEYS: &[&str] = &[
     "lowRune",
     "midRune",
     "highRune",
-    "runewords",
     "charm",
     "jewel",
     "perfectGem",
@@ -806,7 +805,7 @@ fn default_drops_tracker_categories() -> HashMap<String, bool> {
         .map(|key| {
             (
                 (*key).to_string(),
-                matches!(*key, "unique" | "hellforged" | "sets" | "runewords" | "fateCard"),
+                matches!(*key, "unique" | "hellforged" | "sets" | "fateCard"),
             )
         })
         .collect()
@@ -1458,7 +1457,7 @@ fn migrate_settings_value(mut value: serde_json::Value) -> serde_json::Value {
     }
 
     let runeword_tracking_migrated = settings
-        .get("runewordDropsTrackerDefaultMigrated")
+        .get("runewordDropsTrackerManualOnlyMigrated")
         .and_then(|raw| raw.as_bool())
         .unwrap_or(false);
 
@@ -1467,16 +1466,28 @@ fn migrate_settings_value(mut value: serde_json::Value) -> serde_json::Value {
             .get_mut("dropsTrackerCategories")
             .and_then(|raw| raw.as_object_mut())
         {
-            categories.insert("runewords".to_string(), serde_json::Value::Bool(true));
+            categories.remove("runewords");
         }
         if let Some(categories) = settings
             .get_mut("totalDropsTrackerCategories")
             .and_then(|raw| raw.as_object_mut())
         {
-            categories.insert("runewords".to_string(), serde_json::Value::Bool(true));
+            categories.remove("runewords");
+        }
+        if let Some(counts) = settings
+            .get_mut("dropsTrackerCounts")
+            .and_then(|raw| raw.as_object_mut())
+        {
+            counts.remove("runewords");
+        }
+        if let Some(counts) = settings
+            .get_mut("totalDropsTrackerCounts")
+            .and_then(|raw| raw.as_object_mut())
+        {
+            counts.remove("runewords");
         }
         settings.insert(
-            "runewordDropsTrackerDefaultMigrated".to_string(),
+            "runewordDropsTrackerManualOnlyMigrated".to_string(),
             serde_json::Value::Bool(true),
         );
     }
