@@ -1,6 +1,6 @@
 {
   "productName": "SoECompanion",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "identifier": "com.soecompanion.app",
   "build": {
     "beforeDevCommand": "corepack pnpm dev",
