@@ -30,6 +30,17 @@
   const SHARED_TABS = Array.from({ length: STASH_SORTER_SHARED_TAB_COUNT }, (_, index) => index + 1);
   const GRID_COLUMNS = Array.from({ length: STASH_SORTER_GRID_COLUMNS }, (_, index) => index);
   const GRID_ROWS = Array.from({ length: STASH_SORTER_GRID_ROWS }, (_, index) => index);
+  const REQUIRED_SHARED_STASH_HOTKEYS = [
+    'Shared Tab 1 = Num Pad 1',
+    'Shared Tab 2 = Num Pad 2',
+    'Shared Tab 3 = Num Pad 3',
+    'Shared Tab 4 = Num Pad 4',
+    'Shared Tab 5 = Num Pad 5',
+    'Shared Tab 6 = Num Pad 6',
+    'Shared Tab 7 = Num Pad 7',
+    'Shared Tab 8 = Num Pad 8',
+    'Shared Tab 9 = Num Pad 9',
+  ];
 
   let activeSubTab = $state<StashSorterSubTab>('settings');
   let blacklistDraft = $state(settingsStore.settings.stashSorterBlacklist.join('\n'));
@@ -194,6 +205,18 @@
 </script>
 
 <section class="tab-content stash-sorter-tab">
+  <div class="stash-sorter-warning">
+    <div class="warning-copy">
+      <strong>Warning: You must configure your shared stash hotkeys!</strong>
+      <span>Set Shared Tab 1-9 to Num Pad 1-9 in Diablo II or the sorter cannot reliably switch to the requested stash tab.</span>
+    </div>
+    <div class="required-hotkeys">
+      {#each REQUIRED_SHARED_STASH_HOTKEYS as binding}
+        <span>{binding}</span>
+      {/each}
+    </div>
+  </div>
+
   <SubTabs tabs={subTabs} bind:activeTab={activeSubTab} ariaLabel="Stash Sorter sections" />
 
   {#if activeSubTab === 'settings'}
@@ -389,17 +412,6 @@
       </div>
     </details>
 
-    <details class="settings-section compact-disclosure">
-      <summary>
-        <span>Available Categories</span>
-        <small>{STASH_SORTER_CATEGORIES.length} categories</small>
-      </summary>
-      <div class="category-list">
-        {#each STASH_SORTER_CATEGORIES as category}
-          <span>{stashSorterCategoryLabel(category.key)}</span>
-        {/each}
-      </div>
-    </details>
   {:else if activeSubTab === 'inventory-cells'}
     <div class="settings-section">
       <div class="section-heading-row">
@@ -473,6 +485,49 @@
   :global(.stash-sorter-tab .sub-tab) {
     min-height: 0;
     white-space: nowrap;
+  }
+
+  .stash-sorter-warning {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2) var(--space-3);
+    align-items: center;
+    padding: var(--space-3);
+    border: 1px solid color-mix(in srgb, var(--status-warning-text) 70%, var(--border-primary));
+    border-radius: var(--radius-sm);
+    background: rgba(255, 176, 32, 0.1);
+    color: var(--text-primary);
+  }
+
+  .warning-copy {
+    display: grid;
+    gap: var(--space-1);
+  }
+
+  .warning-copy strong {
+    color: var(--status-warning-text);
+    font-size: var(--text-base);
+  }
+
+  .warning-copy span {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .required-hotkeys {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 4px;
+  }
+
+  .required-hotkeys span {
+    padding: 4px 6px;
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--accent-gold);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
   }
 
   .section-heading-row,
@@ -824,20 +879,6 @@
   .blacklist-actions {
     margin-top: var(--space-2);
     justify-content: flex-end;
-  }
-
-  .category-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-2);
-  }
-
-  .category-list span {
-    padding: var(--space-2);
-    border: 1px solid var(--border-primary);
-    border-radius: var(--radius-sm);
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
   }
 
   @media (max-width: 900px) {

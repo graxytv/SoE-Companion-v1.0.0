@@ -40,7 +40,6 @@ export const STASH_SORTER_MAX_SPEED = 250;
 export const STASH_SORTER_DEFAULT_SPEED = 100;
 
 export const STASH_SORTER_CATEGORIES = [
-  { key: 'runes', label: 'Runes' },
   { key: 'fate-cards', label: 'Fate Cards' },
   { key: 'essences', label: 'Essences' },
   { key: 'glyphs', label: 'Glyphs' },
@@ -55,7 +54,6 @@ export const STASH_SORTER_CATEGORIES = [
   { key: 'charms', label: 'Charms' },
   { key: 'jewels', label: 'Jewels' },
   { key: 'hatred-orbs', label: 'Hatred Orbs' },
-  { key: 'ascendancy', label: 'Ascendancy' },
 ] as const;
 
 const CATEGORY_KEYS = new Set<string>(STASH_SORTER_CATEGORIES.map((category) => category.key));
@@ -92,7 +90,7 @@ export function createStashSorterRule(
   patch: Partial<StashSorterRule> = {},
 ): StashSorterRule {
   const matchType: StashSorterMatchType = 'category';
-  const fallbackMatchValue = STASH_SORTER_CATEGORIES[0]?.key ?? 'runes';
+  const fallbackMatchValue = STASH_SORTER_CATEGORIES[0]?.key ?? 'fate-cards';
   const rawMatchValue = patch.matchValue ?? fallbackMatchValue;
   const matchValue = normalizeStashSorterMatchValue(
     matchType,
