@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { Button, SubTabs, Toggle } from '../components';
   import { itemsDictionaryStore, settingsStore, type FateCardBackupStatus } from '../stores';
@@ -24,13 +23,10 @@
     { id: 'card-list', label: 'Card List' },
     { id: 'backup', label: 'Backup' },
   ];
-  const FATE_CARD_STASH_SYNC_INTERVAL_MS = 30 * 1000;
-
   let activeSubTab = $state('card-list');
   let fateCardSearch = $state('');
   let fateCardMode = $state<'all' | 'owned' | 'full' | 'incomplete'>('all');
-  let syncBusy = $state(false);
-  let syncMessage = $state('Fate Card counts auto-sync from the detected pd2_shared.stash file every 30 seconds.');
+  let syncMessage = $state('Fate Card counts refresh when you use Sync All or save and exit.');
   let lastSyncAt = $state<string | null>(null);
   let selectedDetails = $state<GrailItemDetails | null>(null);
   let backupBusy = $state(false);
@@ -125,27 +121,10 @@
     return `${total} Fate Card${total === 1 ? '' : 's'} synced from shared stash item slots.`;
   }
 
-  async function syncFateCardsFromSharedStash(): Promise<void> {
-    if (syncBusy) return;
-    syncBusy = true;
-    try {
-      const result = await invoke<RuneStashSyncResult>('sync_shared_stash_runes', {
-        stashPath: null,
-      });
-      settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
-      lastSyncAt = new Date().toISOString();
-      syncMessage = fateCardSyncStatus(result);
-    } catch (error) {
-      syncMessage = `Shared-stash sync failed: ${error}`;
-    } finally {
-      syncBusy = false;
-    }
-  }
-
   function resetFateCardCounts(): void {
     settingsStore.setFateCardCounts({});
     lastSyncAt = new Date().toISOString();
-    syncMessage = 'In-app Fate Card stash counts reset to 0. This does not modify pd2_shared.stash; counts refill automatically when the shared stash has cards again.';
+    syncMessage = 'In-app Fate Card stash counts reset to 0. This does not modify pd2_shared.stash; counts refill on the next Sync All or save and exit.';
   }
 
   function openItemDetails(item: Parameters<typeof detailsForGrailItem>[0]): void {
@@ -199,18 +178,13 @@
 
   onMount(() => {
     const unlisteners: Array<() => void> = [];
-    void syncFateCardsFromSharedStash();
     void refreshBackupStatus();
     listen<RuneStashSyncResult>('master-shared-stash-synced', (event) => {
       settingsStore.setFateCardCounts(event.payload.fate_card_counts ?? {});
       lastSyncAt = new Date().toISOString();
       syncMessage = fateCardSyncStatus(event.payload);
     }).then((unlisten) => unlisteners.push(unlisten));
-    const timer = window.setInterval(() => {
-      void syncFateCardsFromSharedStash();
-    }, FATE_CARD_STASH_SYNC_INTERVAL_MS);
     return () => {
-      window.clearInterval(timer);
       unlisteners.forEach((unlisten) => unlisten());
     };
   });

@@ -302,6 +302,10 @@ pub struct AppSettings {
     #[serde(default = "default_main_tab_order")]
     pub main_tab_order: Vec<String>,
 
+    /// When true, Sync All data refreshes automatically after Save & Exit.
+    #[serde(default = "default_true")]
+    pub auto_sync_on_save_exit: bool,
+
     /// Saved Drops Tracker sub-tab order.
     #[serde(default = "default_drops_tracker_sub_tab_order")]
     pub drops_tracker_sub_tab_order: Vec<String>,
@@ -1019,6 +1023,7 @@ impl Default for AppSettings {
             project_d2_path: None,
             runeword_planner_stash_path: None,
             main_tab_order: default_main_tab_order(),
+            auto_sync_on_save_exit: true,
             drops_tracker_sub_tab_order: default_drops_tracker_sub_tab_order(),
             holy_grail_sub_tab_order: default_holy_grail_sub_tab_order(),
             achievement_stats: default_achievement_stats(),

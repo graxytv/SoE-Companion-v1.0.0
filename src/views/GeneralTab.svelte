@@ -117,6 +117,20 @@
   </div>
 
   <div class="settings-section">
+    <h2 class="section-title">Sync</h2>
+    <div class="setting-row">
+      <div class="setting-info">
+        <span class="setting-label">Automatic Sync on Save & Exit</span>
+        <span class="setting-hint">When enabled, SoE Companion syncs drops, shared stash, Fate Cards, account stats, and character levels after you save and exit. When disabled, only the header Sync All button refreshes data.</span>
+      </div>
+      <Toggle
+        checked={settingsStore.settings.autoSyncOnSaveExit}
+        onchange={(enabled) => settingsStore.setAutoSyncOnSaveExit(enabled)}
+      />
+    </div>
+  </div>
+
+  <div class="settings-section">
     <h2 class="section-title">Hotkeys</h2>
 
     {#each HOTKEY_ROWS as row (row.id)}

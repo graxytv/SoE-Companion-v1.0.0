@@ -64,8 +64,7 @@
     const QUIET_SYNC_DEBOUNCE_MS = 2500;
     const SAVE_EXIT_SYNC_DEBOUNCE_MS = 250;
     const QUIET_SYNC_COOLDOWN_MS = 10_000;
-    const SAVE_EXIT_CONFIRM_MS = 750;
-    const SAVE_EXIT_FAST_REENTRY_MIN_MS = 0;
+    const SAVE_EXIT_CONFIRM_MS = 5000;
     const SAVE_EXIT_LATE_HOOK_PASS_MS = 1000;
     let suppressTrackingUntilMs = $state(0);
     let quietSyncBusy = $state(false);
@@ -127,19 +126,20 @@
         if (status !== "ingame" && status !== "menu" && status !== "unknown") return;
         const previous = gameStatus;
         gameStatus = status;
+        if (!settingsStore.settings.autoSyncOnSaveExit && saveExitSyncTimer) {
+            clearTimeout(saveExitSyncTimer);
+            saveExitSyncTimer = null;
+            saveExitMenuEnteredAtMs = 0;
+        }
         if (status === "ingame" && previous !== "ingame") {
             if (saveExitSyncTimer) {
-                const menuElapsedMs = saveExitMenuEnteredAtMs > 0 ? Date.now() - saveExitMenuEnteredAtMs : 0;
                 clearTimeout(saveExitSyncTimer);
                 saveExitSyncTimer = null;
                 saveExitMenuEnteredAtMs = 0;
-                if (menuElapsedMs >= SAVE_EXIT_FAST_REENTRY_MIN_MS) {
-                    scheduleQuietSync("save-exit");
-                }
             }
             suppressTrackingUntilMs = Date.now() + GAME_ENTRY_TRACKING_SUPPRESSION_MS;
         }
-        if (status === "menu" && previous === "ingame") {
+        if (status === "menu" && previous === "ingame" && settingsStore.settings.autoSyncOnSaveExit) {
             if (saveExitSyncTimer) clearTimeout(saveExitSyncTimer);
             saveExitMenuEnteredAtMs = Date.now();
             saveExitSyncTimer = setTimeout(() => {
@@ -265,7 +265,6 @@
             holyGrailItems: buildHolyGrailItems(itemsDictionaryStore.dict),
             runeTrackerCounts: settingsStore.settings.runeTrackerCounts,
         });
-        scheduleQuietSync("save-exit");
     }
 
     interface RuneStashSyncResult {
@@ -788,19 +787,39 @@
         }
         quietSyncBusy = true;
         const label = sources.length > 0 ? sources.join(", ") : "quiet trigger";
+        const isSaveExitSync = sources.includes("save-exit");
         try {
             await flushCollectedDrops(label);
-            if (sources.includes("save-exit")) {
+            if (isSaveExitSync) {
                 await delay(SAVE_EXIT_LATE_HOOK_PASS_MS);
                 await flushCollectedDrops(`${label} late hook pass`);
+                try {
+                    const result = await invoke<RuneStashSyncResult>("sync_shared_stash_runes", {
+                        stashPath: settingsStore.settings.runewordPlannerStashPath,
+                    });
+                    settingsStore.setFateCardCounts(result.fate_card_counts ?? {});
+                    await emit("master-shared-stash-synced", result);
+                } catch (error) {
+                    console.warn(`[MainWindow] ${label} shared-stash sync failed:`, error);
+                }
             }
-            try {
-                const result = await invoke<AccountStatsSyncResult>("sync_accountstats_stash", {
-                    stashPath: settingsStore.settings.runewordPlannerStashPath,
-                });
-                mergeAccountStatsSyncResult(result);
-            } catch (error) {
-                console.warn(`[MainWindow] ${label} account-stats sync failed:`, error);
+            if (isSaveExitSync) {
+                try {
+                    const result = await invoke<AccountStatsSyncResult>("sync_accountstats_stash", {
+                        stashPath: settingsStore.settings.runewordPlannerStashPath,
+                    });
+                    mergeAccountStatsSyncResult(result);
+                } catch (error) {
+                    console.warn(`[MainWindow] ${label} account-stats sync failed:`, error);
+                }
+                try {
+                    const result = await invoke<CharacterLevelSyncResult>("sync_character_levels", {
+                        stashPath: settingsStore.settings.runewordPlannerStashPath,
+                    });
+                    applyCharacterLevelSyncResult(result);
+                } catch (error) {
+                    console.warn(`[MainWindow] ${label} character-level sync failed:`, error);
+                }
             }
         } finally {
             evaluateAchievementUnlocks();
@@ -833,11 +852,15 @@
             quietSyncSources.clear();
             quietSyncTimer = null;
             quietSyncPending = false;
+            if (pendingSources.includes("save-exit") && (!settingsStore.settings.autoSyncOnSaveExit || gameStatus !== "menu")) {
+                return;
+            }
             void syncFromQuietTrigger(pendingSources);
         }, hasPrioritySource ? SAVE_EXIT_SYNC_DEBOUNCE_MS : QUIET_SYNC_DEBOUNCE_MS);
     }
 
     function scheduleQuietSync(source: string): void {
+        if (source === "save-exit" && (!settingsStore.settings.autoSyncOnSaveExit || gameStatus !== "menu")) return;
         quietSyncSources.add(source);
         quietSyncPending = true;
         armQuietSyncTimer();

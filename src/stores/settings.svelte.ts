@@ -223,6 +223,8 @@ export interface AppSettings {
   mainTabOrder: string[];
   /** When true, the user has completed the guided setup wizard at least once. */
   setupWizardCompleted: boolean;
+  /** When true, Sync All data refreshes automatically after Save & Exit. */
+  autoSyncOnSaveExit: boolean;
   /** Saved Drops Tracker sub-tab order. */
   dropsTrackerSubTabOrder: string[];
   /** Saved Holy Grail sub-tab order. */
@@ -616,6 +618,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   runewordPlannerStashPath: null,
   mainTabOrder: [...DEFAULT_MAIN_TAB_ORDER],
   setupWizardCompleted: false,
+  autoSyncOnSaveExit: true,
   dropsTrackerSubTabOrder: [...DEFAULT_DROPS_TRACKER_SUB_TAB_ORDER],
   holyGrailSubTabOrder: [...DEFAULT_HOLY_GRAIL_SUB_TAB_ORDER],
   achievementStats: defaultAchievementStats(),
@@ -1227,6 +1230,9 @@ class SettingsStore {
       setupWizardCompleted:
         settings.setupWizardCompleted ??
         DEFAULT_SETTINGS.setupWizardCompleted,
+      autoSyncOnSaveExit:
+        settings.autoSyncOnSaveExit ??
+        DEFAULT_SETTINGS.autoSyncOnSaveExit,
       dropsTrackerSubTabOrder: this.normalizeTabOrder(
         settings.dropsTrackerSubTabOrder,
         DEFAULT_DROPS_TRACKER_SUB_TAB_ORDER,
@@ -1853,6 +1859,10 @@ class SettingsStore {
 
   setRunewordPlannerStashPath(path: string | null): void {
     this.set("runewordPlannerStashPath", path && path.trim() ? path.trim() : null);
+  }
+
+  setAutoSyncOnSaveExit(enabled: boolean): void {
+    this.set("autoSyncOnSaveExit", enabled);
   }
 
   setMainTabOrder(order: string[]): void {

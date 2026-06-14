@@ -35,8 +35,6 @@
     { id: 'notifications', label: 'Notifications' },
     { id: 'backup', label: 'Backup' },
   ];
-  const SHARED_STASH_SYNC_INTERVAL_MS = 30 * 1000;
-
   let orderedSubTabs = $derived(applyTabOrder(subTabs, settingsStore.settings.holyGrailSubTabOrder));
 
   let search = $state('');
@@ -50,7 +48,7 @@
   let backupStatus = $state<{ backupExists: boolean; backupPath: string; foundCount: number; exportedAt: string | null } | null>(null);
 
   let runeSyncBusy = $state(false);
-  let runeSyncMessage = $state('Shared-stash sync reads rune material counts and Fate Card item stacks from the selected pd2_shared.stash file.');
+  let runeSyncMessage = $state('Shared-stash counts refresh when you use Sync All or save and exit.');
   let lastRuneSyncAt = $state<string | null>(null);
   let runeInventory = $state<RuneInventory>(emptyRuneInventory());
   let runewordSearch = $state('');
@@ -327,7 +325,7 @@
   onMount(() => {
     const unlisteners: Array<() => void> = [];
     stashPathDraft = settingsStore.settings.runewordPlannerStashPath ?? '';
-    void detectSharedStashPaths().then(() => syncRunesFromSharedStash());
+    void detectSharedStashPaths();
     listen<RuneStashSyncResult>('master-shared-stash-synced', (event) => {
       runeInventory = normalizeRuneInventory(event.payload.counts);
       if (event.payload.fate_card_sync_available !== false) {
@@ -336,11 +334,7 @@
       lastRuneSyncAt = new Date().toISOString();
       runeSyncMessage = event.payload.message;
     }).then((unlisten) => unlisteners.push(unlisten));
-    const timer = window.setInterval(() => {
-      void syncRunesFromSharedStash();
-    }, SHARED_STASH_SYNC_INTERVAL_MS);
     return () => {
-      window.clearInterval(timer);
       unlisteners.forEach((unlisten) => unlisten());
     };
   });

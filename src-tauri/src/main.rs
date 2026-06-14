@@ -2398,7 +2398,10 @@ fn main() {
             // Calm sync model: the scanner watches drops and queues them in
             // memory; the hook log provides the authoritative drop feed for
             // Save & Exit / Sync All imports.
-            app.state::<AppState>().account_stats_watcher.start(app.handle().clone());
+            // Account stats sync is intentionally driven by Save & Exit and
+            // manual Sync All only. The previous background watcher could
+            // emit account-stat updates during active gameplay, which made
+            // the app appear to sync in the middle of a run.
             spawn_auto_scanner(
                 is_scanning.clone(),
                 should_auto_scan.clone(),
